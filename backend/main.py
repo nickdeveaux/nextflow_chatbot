@@ -7,6 +7,7 @@ import os
 import openai
 from datetime import datetime
 import uuid
+import time
 
 # Vector store imports
 from vector_store.embeddings import EmbeddingGenerator
@@ -199,6 +200,7 @@ async def get_llm_response(messages: List[Dict], context: str) -> str:
     
     if use_mock or not api_key:
         # Mock mode - return a helpful response based on context
+        time.sleep(10)
         return generate_mock_response(messages[-1]["content"], context)
     
     try:

@@ -8,16 +8,94 @@ interface Message {
   citations?: string[]
 }
 
+const LOADING_MESSAGES = [
+  'Thinking',
+  'Pondering',
+  'Noodling',
+  'Considering',
+  'Examining',
+  'Researching',
+  'Reflecting',
+  'Evaluating',
+  'Deliberating',
+]
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [darkMode, setDarkMode] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+  useEffect(() => {
+    // Check for saved theme preference or default to system preference
+    const savedTheme = localStorage.getItem('darkMode')
+    if (savedTheme !== null) {
+      setDarkMode(savedTheme === 'true')
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      setDarkMode(prefersDark)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Apply dark mode class to document
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('darkMode', 'true')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('darkMode', 'false')
+    }
+  }, [darkMode])
+
+  useEffect(() => {
+    if (!loading) {
+      // Reset to first message when not loading
+      setLoadingMessage(LOADING_MESSAGES[0])
+      return
+    }
+
+    // Track which indexes we've already used
+    const usedIndexes = new Set<number>()
+    
+    // Get a random unused index
+    const getRandomUnusedIndex = (): number => {
+      // If we've used all messages, reset
+      if (usedIndexes.size >= LOADING_MESSAGES.length) {
+        usedIndexes.clear()
+      }
+      
+      // Get available indexes
+      const availableIndexes = LOADING_MESSAGES
+        .map((_, index) => index)
+        .filter(index => !usedIndexes.has(index))
+      
+      // Randomly select from available
+      const randomIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)]
+      usedIndexes.add(randomIndex)
+      
+      return randomIndex
+    }
+
+    // Start with a random message
+    const initialIndex = getRandomUnusedIndex()
+    setLoadingMessage(LOADING_MESSAGES[initialIndex])
+
+    // Change message every 2 seconds with random unused selection
+    const interval = setInterval(() => {
+      const nextIndex = getRandomUnusedIndex()
+      setLoadingMessage(LOADING_MESSAGES[nextIndex])
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [loading])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -100,6 +178,13 @@ export default function Home() {
     <div className="container">
       <div className="header">
         <h1>Nextflow Chat Assistant</h1>
+        <button
+          className="theme-toggle"
+          onClick={() => setDarkMode(!darkMode)}
+          aria-label="Toggle dark mode"
+        >
+          {darkMode ? '☀️' : '🌙'}
+        </button>
       </div>
 
       <div className="chat-messages">
@@ -141,7 +226,7 @@ export default function Home() {
           <div className="message assistant">
             <div className="message-content">
               <div className="loading">
-                <span>Thinking</span>
+                <span>{loadingMessage}</span>
                 <div className="loading-dots">
                   <span className="loading-dot"></span>
                   <span className="loading-dot"></span>
