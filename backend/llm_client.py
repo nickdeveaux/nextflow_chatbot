@@ -2,13 +2,12 @@
 LLM client for calling Gemini via Vertex AI using google-genai SDK.
 """
 import os
-import tempfile
 from typing import List, Dict, Optional
 from google import genai
 import config
 from google.genai import types
-import google.auth
 from google.oauth2 import service_account
+
 
 class LLMClient:
     """Client for calling LLMs via Vertex AI using google-genai SDK."""
@@ -19,7 +18,7 @@ class LLMClient:
         project_id: Optional[str] = None,
         location: Optional[str] = None,
         max_tokens: Optional[int] = None,
-        api_key: Optional[str] = None
+        service_account_path: Optional[str] = None
     ):
         """
         Initialize LLM client.
@@ -29,96 +28,42 @@ class LLMClient:
             project_id: Google Cloud project ID (defaults to config.GOOGLE_CLOUD_PROJECT)
             location: Vertex AI location (defaults to 'us-central1')
             max_tokens: Max tokens (defaults to config.LLM_MAX_TOKENS)
-            api_key: Service account JSON key or file path (defaults to config.GOOGLE_VERTEX_API_KEY)
+            service_account_path: Path to service account JSON file (defaults to config.SERVICE_ACCOUNT_PATH)
         """
         self.model = model or config.LLM_MODEL
         self.project_id = project_id or config.GOOGLE_CLOUD_PROJECT
         self.location = location or "us-central1"
         self.max_tokens = max_tokens or config.LLM_MAX_TOKENS
-        api_key_config = api_key or config.GOOGLE_VERTEX_API_KEY
-        # Resolve relative paths relative to project root
-        if api_key_config and not api_key_config.startswith("{") and not os.path.isabs(api_key_config):
-            # If it's a relative path, resolve it relative to the project root (parent of backend)
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            api_key_config = os.path.join(project_root, api_key_config)
-        self.api_key = api_key_config
-        self._temp_credential_file = None
         
         if not self.project_id:
             raise ValueError("GOOGLE_CLOUD_PROJECT not set for Vertex AI")
         
-        # Setup credentials
-        credentials = self._get_credentials()
+        # Resolve service account path
+        service_account_path = service_account_path or config.SERVICE_ACCOUNT_PATH
+        if not service_account_path:
+            raise ValueError("SERVICE_ACCOUNT_PATH not set")
         
-        # Initialize client with explicit credentials
+        # Resolve relative paths relative to project root
+        if not os.path.isabs(service_account_path):
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            service_account_path = os.path.join(project_root, service_account_path)
+        
+        if not os.path.exists(service_account_path):
+            raise ValueError(f"Service account file not found: {service_account_path}")
+        
+        # Load credentials
+        credentials = service_account.Credentials.from_service_account_file(
+            service_account_path,
+            scopes=['https://www.googleapis.com/auth/cloud-platform']
+        )
+        
+        # Initialize client
         self.client = genai.Client(
             vertexai=True,
             project=self.project_id,
             location=self.location,
             credentials=credentials
         )
-    
-    def _get_credentials(self):
-        """Get Google Cloud credentials from API key or ADC."""
-        # If no API key provided, use Application Default Credentials
-        if not self.api_key:
-            try:
-                credentials, _ = google.auth.default()
-                return credentials
-            except google.auth.exceptions.DefaultCredentialsError:
-                raise ValueError(
-                    "No credentials found. Set GOOGLE_APPLICATION_CREDENTIALS env var, "
-                    "run 'gcloud auth application-default login', or provide a service account JSON key."
-                )
-        
-        # Check if API key is JSON (service account key)
-        api_key_stripped = self.api_key.strip()
-        if api_key_stripped.startswith("{"):
-            # Write JSON to temp file
-            self._temp_credential_file = tempfile.NamedTemporaryFile(
-                mode='w',
-                suffix='.json',
-                delete=False
-            )
-            self._temp_credential_file.write(self.api_key)
-            self._temp_credential_file.close()
-            creds_path = self._temp_credential_file.name
-        elif os.path.exists(self.api_key) and os.path.isfile(self.api_key):
-            # It's a valid file path to credentials
-            creds_path = self.api_key
-        else:
-            # API key token - not supported for Vertex AI
-            # Try to use ADC instead
-            print(
-                f"Warning: API key format not recognized for Vertex AI. "
-                f"Attempting to use Application Default Credentials."
-            )
-            try:
-                credentials, _ = google.auth.default()
-                return credentials
-            except google.auth.exceptions.DefaultCredentialsError:
-                raise ValueError(
-                    "Invalid API key format. Vertex AI requires a service account JSON key or file path. "
-                    "Alternatively, set up Application Default Credentials via 'gcloud auth application-default login'."
-                )
-        
-        # Load service account credentials
-        try:
-            credentials = service_account.Credentials.from_service_account_file(
-                creds_path,
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
-            )
-            return credentials
-        except Exception as e:
-            raise ValueError(f"Failed to load credentials from {creds_path}: {e}")
-    
-    def __del__(self):
-        """Cleanup temp credential file on deletion."""
-        if self._temp_credential_file and os.path.exists(self._temp_credential_file.name):
-            try:
-                os.remove(self._temp_credential_file.name)
-            except:
-                pass
     
     def complete(
         self,
@@ -138,7 +83,6 @@ class LLMClient:
         Raises:
             ValueError: If response is empty
         """
-        
         contents = []
         
         # Add conversation messages as Content objects
@@ -158,8 +102,6 @@ class LLMClient:
             contents.append(content)
         
         # Generate content
-        # Use config parameter for generation settings
-        # System instruction goes in config, not contents
         gen_config_params = {
             "max_output_tokens": self.max_tokens
         }

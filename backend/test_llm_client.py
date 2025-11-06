@@ -25,10 +25,11 @@ def sample_messages():
 def test_llm_client_initialization():
     """Test LLM client initialization with defaults."""
     with patch('llm_client.genai.Client') as mock_client, \
-         patch('llm_client.google.auth.default') as mock_auth:
+         patch('llm_client.service_account.Credentials.from_service_account_file') as mock_creds, \
+         patch('os.path.exists', return_value=True):
         # Mock credentials
-        mock_creds = MagicMock()
-        mock_auth.return_value = (mock_creds, None)
+        mock_cred_obj = MagicMock()
+        mock_creds.return_value = mock_cred_obj
         
         client = LLMClient()
         assert client.model == config.LLM_MODEL
@@ -39,22 +40,24 @@ def test_llm_client_initialization():
         assert call_kwargs["vertexai"] is True
         assert call_kwargs["project"] == config.GOOGLE_CLOUD_PROJECT
         assert call_kwargs["location"] == "us-central1"
-        assert "credentials" in call_kwargs
+        assert call_kwargs["credentials"] == mock_cred_obj
 
 
 def test_llm_client_custom_params():
     """Test LLM client with custom parameters."""
     with patch('llm_client.genai.Client') as mock_client, \
-         patch('llm_client.google.auth.default') as mock_auth:
+         patch('llm_client.service_account.Credentials.from_service_account_file') as mock_creds, \
+         patch('os.path.exists', return_value=True):
         # Mock credentials
-        mock_creds = MagicMock()
-        mock_auth.return_value = (mock_creds, None)
+        mock_cred_obj = MagicMock()
+        mock_creds.return_value = mock_cred_obj
         
         client = LLMClient(
             model="test-model",
             project_id="test-project",
             location="us-west1",
-            max_tokens=100
+            max_tokens=100,
+            service_account_path="test-credentials.json"
         )
         assert client.model == "test-model"
         assert client.project_id == "test-project"
@@ -65,24 +68,42 @@ def test_llm_client_custom_params():
         assert call_kwargs["vertexai"] is True
         assert call_kwargs["project"] == "test-project"
         assert call_kwargs["location"] == "us-west1"
-        assert "credentials" in call_kwargs
+        assert call_kwargs["credentials"] == mock_cred_obj
 
 
 def test_llm_client_no_project_id():
     """Test error when project ID is not set."""
-    with patch('llm_client.genai.Client'):
-        client = LLMClient()
-        # Override to ensure it's None
-        original_project = config.GOOGLE_CLOUD_PROJECT
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        # Temporarily override config
+        import llm_client
+        original_project = llm_client.config.GOOGLE_CLOUD_PROJECT
         try:
-            # Temporarily set config to None for this test
-            import llm_client
             llm_client.config.GOOGLE_CLOUD_PROJECT = None
-            client.project_id = None
             with pytest.raises(ValueError, match="GOOGLE_CLOUD_PROJECT not set"):
-                LLMClient(project_id=None)
+                LLMClient(project_id=None, service_account_path="test.json")
         finally:
             llm_client.config.GOOGLE_CLOUD_PROJECT = original_project
+
+
+def test_llm_client_no_service_account_path():
+    """Test error when service account path is not set."""
+    with pytest.raises(ValueError, match="SERVICE_ACCOUNT_PATH not set"):
+        # Temporarily override config
+        import llm_client
+        original_path = llm_client.config.SERVICE_ACCOUNT_PATH
+        try:
+            llm_client.config.SERVICE_ACCOUNT_PATH = None
+            LLMClient(service_account_path=None)
+        finally:
+            llm_client.config.SERVICE_ACCOUNT_PATH = original_path
+
+
+def test_llm_client_service_account_file_not_found():
+    """Test error when service account file doesn't exist."""
+    with patch('os.path.exists', return_value=False):
+        with pytest.raises(ValueError, match="Service account file not found"):
+            LLMClient(service_account_path="nonexistent.json")
 
 
 def test_llm_client_complete_success(mock_genai_client, sample_messages):
@@ -98,8 +119,10 @@ def test_llm_client_complete_success(mock_genai_client, sample_messages):
     mock_client_instance.models = mock_models
     mock_genai_client.return_value = mock_client_instance
     
-    client = LLMClient(project_id="test-project")
-    result = client.complete(sample_messages)
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        client = LLMClient(project_id="test-project", service_account_path="test.json")
+        result = client.complete(sample_messages)
     
     assert result == "Nextflow is a workflow system."
     mock_models.generate_content.assert_called_once()
@@ -121,8 +144,10 @@ def test_llm_client_with_system_prompt(mock_genai_client, sample_messages):
     mock_client_instance.models = mock_models
     mock_genai_client.return_value = mock_client_instance
     
-    client = LLMClient(project_id="test-project")
-    result = client.complete(sample_messages, system_prompt="You are a helpful assistant.")
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        client = LLMClient(project_id="test-project", service_account_path="test.json")
+        result = client.complete(sample_messages, system_prompt="You are a helpful assistant.")
     
     assert result == "Response"
     # Check that system prompt was passed in config.system_instruction
@@ -152,9 +177,11 @@ def test_llm_client_empty_response(mock_genai_client, sample_messages):
     mock_client_instance.models = mock_models
     mock_genai_client.return_value = mock_client_instance
     
-    client = LLMClient(project_id="test-project")
-    with pytest.raises(ValueError, match="Empty response from LLM"):
-        client.complete(sample_messages)
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        client = LLMClient(project_id="test-project", service_account_path="test.json")
+        with pytest.raises(ValueError, match="Empty response from LLM"):
+            client.complete(sample_messages)
 
 
 def test_llm_client_context_manager(mock_genai_client, sample_messages):
@@ -169,9 +196,11 @@ def test_llm_client_context_manager(mock_genai_client, sample_messages):
     mock_client_instance.models = mock_models
     mock_genai_client.return_value = mock_client_instance
     
-    with LLMClient(project_id="test-project") as client:
-        result = client.complete(sample_messages)
-        assert result == "Response"
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        with LLMClient(project_id="test-project", service_account_path="test.json") as client:
+            result = client.complete(sample_messages)
+            assert result == "Response"
 
 
 def test_llm_client_multi_turn_conversation(mock_genai_client):
@@ -186,20 +215,22 @@ def test_llm_client_multi_turn_conversation(mock_genai_client):
     mock_client_instance.models = mock_models
     mock_genai_client.return_value = mock_client_instance
     
-    client = LLMClient(project_id="test-project")
-    messages = [
-        {"role": "user", "content": "What is Nextflow?"},
-        {"role": "assistant", "content": "Nextflow is a workflow system."},
-        {"role": "user", "content": "Tell me more."}
-    ]
-    
-    result = client.complete(messages)
-    assert result == "Follow-up response"
-    
-    # Verify all messages were passed
-    call_args = mock_models.generate_content.call_args
-    contents = call_args[1]["contents"]
-    assert len(contents) == 3
-    assert contents[0].role == "user"
-    assert contents[1].role == "assistant"
-    assert contents[2].role == "user"
+    with patch('os.path.exists', return_value=True), \
+         patch('llm_client.service_account.Credentials.from_service_account_file'):
+        client = LLMClient(project_id="test-project", service_account_path="test.json")
+        messages = [
+            {"role": "user", "content": "What is Nextflow?"},
+            {"role": "assistant", "content": "Nextflow is a workflow system."},
+            {"role": "user", "content": "Tell me more."}
+        ]
+        
+        result = client.complete(messages)
+        assert result == "Follow-up response"
+        
+        # Verify all messages were passed
+        call_args = mock_models.generate_content.call_args
+        contents = call_args[1]["contents"]
+        assert len(contents) == 3
+        assert contents[0].role == "user"
+        assert contents[1].role == "assistant"
+        assert contents[2].role == "user"

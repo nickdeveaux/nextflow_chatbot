@@ -2,19 +2,10 @@
 Tests for configuration module.
 Run with: pytest test_config.py -v
 """
-import pytest
 import os
 import yaml
 from pathlib import Path
 import config
-
-
-def test_google_vertex_api_key():
-    """Test API key is defined."""
-    assert config.GOOGLE_VERTEX_API_KEY is not None
-    assert isinstance(config.GOOGLE_VERTEX_API_KEY, str)
-    assert len(config.GOOGLE_VERTEX_API_KEY) > 0
-
 
 def test_llm_model():
     """Test LLM model is defined."""

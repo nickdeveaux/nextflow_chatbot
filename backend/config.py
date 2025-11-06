@@ -13,9 +13,9 @@ with open(_CONFIG_PATH, 'r') as f:
     _config = yaml.safe_load(f)
 
 # API Configuration (env var overrides YAML)
-GOOGLE_VERTEX_API_KEY = os.getenv(
-    "GOOGLE_VERTEX_API_KEY",
-    _config['api']['google_vertex_api_key']
+SERVICE_ACCOUNT_PATH = os.getenv(
+    "SERVICE_ACCOUNT_PATH",
+    _config['api'].get('service_account_path', _config['api'].get('google_vertex_api_key', ''))
 )
 GOOGLE_CLOUD_PROJECT = os.getenv(
     "GOOGLE_CLOUD_PROJECT",
