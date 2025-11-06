@@ -1,23 +1,20 @@
 """
-LLM client for calling Gemini via LiteLLM.
-Supports both Vertex AI and Gemini public API endpoints.
+LLM client for calling Gemini via Vertex AI using google-genai SDK.
 """
 import os
-import tempfile
 from typing import List, Dict, Optional
-from litellm import completion
+from google import genai
 import config
 
 
 class LLMClient:
-    """Client for calling LLMs via LiteLLM."""
+    """Client for calling LLMs via Vertex AI using google-genai SDK."""
     
     def __init__(
         self,
         model: Optional[str] = None,
-        api_key: Optional[str] = None,
         project_id: Optional[str] = None,
-        temperature: Optional[float] = None,
+        location: Optional[str] = None,
         max_tokens: Optional[int] = None
     ):
         """
@@ -25,58 +22,27 @@ class LLMClient:
         
         Args:
             model: Model name (defaults to config.LLM_MODEL)
-            api_key: API key (defaults to config.GOOGLE_VERTEX_API_KEY)
             project_id: Google Cloud project ID (defaults to config.GOOGLE_CLOUD_PROJECT)
-            temperature: Temperature setting (defaults to config.LLM_TEMPERATURE)
+            location: Vertex AI location (defaults to 'us-central1')
             max_tokens: Max tokens (defaults to config.LLM_MAX_TOKENS)
         """
         self.model = model or config.LLM_MODEL
-        self.api_key = api_key or config.GOOGLE_VERTEX_API_KEY
         self.project_id = project_id or config.GOOGLE_CLOUD_PROJECT
-        self.temperature = temperature if temperature is not None else config.LLM_TEMPERATURE
+        self.location = location or "us-central1"
         self.max_tokens = max_tokens or config.LLM_MAX_TOKENS
-        self._temp_credential_file = None
+        
+        if not self.project_id:
+            raise ValueError("GOOGLE_CLOUD_PROJECT not set for Vertex AI")
+        
+        # Initialize client - uses Application Default Credentials
+        # Set GOOGLE_APPLICATION_CREDENTIALS env var or use gcloud auth
+        self.client = genai.Client(
+            vertexai=True,
+            project=self.project_id,
+            location=self.location
+        )
     
-    def _setup_vertex_credentials(self):
-        """Setup Vertex AI credentials from API key."""
-        if not self.model.startswith("vertex_ai/"):
-            return
-        
-        if not self.api_key:
-            raise ValueError("GOOGLE_VERTEX_API_KEY not set for Vertex AI model")
-        
-        # Check if API key is JSON (service account key)
-        if self.api_key.strip().startswith("{"):
-            # Write JSON to temp file
-            self._temp_credential_file = tempfile.NamedTemporaryFile(
-                mode='w',
-                suffix='.json',
-                delete=False
-            )
-            self._temp_credential_file.write(self.api_key)
-            self._temp_credential_file.close()
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self._temp_credential_file.name
-        else:
-            # Assume it's a path to credentials file
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.api_key
-        
-        # Set project ID if provided
-        if self.project_id:
-            os.environ["GOOGLE_CLOUD_PROJECT"] = self.project_id
-    
-    def _cleanup_vertex_credentials(self):
-        """Clean up temporary credential files."""
-        if self._temp_credential_file and os.path.exists(self._temp_credential_file.name):
-            os.remove(self._temp_credential_file.name)
-            self._temp_credential_file = None
-        
-        # Remove env vars if we set them
-        if self.model.startswith("vertex_ai/"):
-            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-            if self.project_id:
-                os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
-    
-    async def complete(
+    def complete(
         self,
         messages: List[Dict[str, str]],
         system_prompt: Optional[str] = None
@@ -86,58 +52,53 @@ class LLMClient:
         
         Args:
             messages: List of message dicts with 'role' and 'content'
-            system_prompt: Optional system prompt to prepend
+            system_prompt: Optional system prompt (passed as systemInstruction)
         
         Returns:
             Response content string
         
         Raises:
-            ValueError: If API key not set or response is empty
+            ValueError: If response is empty
         """
-        if not self.api_key:
-            raise ValueError("API key not set")
+        # Prepare contents for SDK
+        contents = []
         
-        # Prepare messages with system prompt
-        prepared_messages = messages.copy()
+        # Add system prompt as systemInstruction if provided
         if system_prompt:
-            if not prepared_messages or prepared_messages[0].get("role") != "system":
-                prepared_messages.insert(0, {"role": "system", "content": system_prompt})
+            contents.append({"role": "system", "text": system_prompt})
         
-        # Setup Vertex credentials if needed
-        self._setup_vertex_credentials()
+        # Add conversation messages
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            # Skip system role if already handled via system_prompt
+            if role == "system" and system_prompt:
+                continue
+            
+            contents.append({"role": role, "text": content})
         
-        try:
-            # Prepare completion parameters
-            completion_params = {
-                "model": self.model,
-                "messages": prepared_messages,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-            }
-            
-            # For non-Vertex models, pass API key directly
-            if not self.model.startswith("vertex_ai/"):
-                completion_params["api_key"] = self.api_key
-            
-            response = completion(**completion_params)
-            
-            if not response or not response.choices:
-                raise ValueError("Empty response from LLM")
-            
-            content = response.choices[0].message.content
-            if not content:
-                raise ValueError("Empty content in LLM response")
-            
-            return content
-        finally:
-            self._cleanup_vertex_credentials()
+        # Generate content
+        # Use config parameter for generation settings
+        from google.genai import types
+        gen_config = types.GenerateContentConfig(
+            max_output_tokens=self.max_tokens
+        )
+        resp = self.client.models.generate_content(
+            model=self.model,
+            contents=contents,
+            config=gen_config
+        )
+        
+        if not resp.text:
+            raise ValueError("Empty response from LLM")
+        
+        return resp.text
     
     def __enter__(self):
         """Context manager entry."""
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - cleanup credentials."""
-        self._cleanup_vertex_credentials()
+        """Context manager exit."""
         return False
-

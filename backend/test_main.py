@@ -4,7 +4,7 @@ Run with: pytest test_main.py -v
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from main import app
 import os
 
@@ -19,8 +19,9 @@ def client():
 def mock_llm_client():
     """Mock LLM client to avoid real API calls in tests."""
     with patch('main.LLMClient') as mock:
-        mock_instance = AsyncMock()
-        mock_instance.complete = AsyncMock(return_value="This is a test response about Nextflow.")
+        mock_instance = MagicMock()
+        # complete is now synchronous
+        mock_instance.complete = MagicMock(return_value="This is a test response about Nextflow.")
         mock.return_value = mock_instance
         yield mock_instance
 

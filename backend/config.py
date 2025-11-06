@@ -32,6 +32,10 @@ LLM_MAX_TOKENS = int(os.getenv(
     "LLM_MAX_TOKENS", 
     str(_config['llm']['max_tokens'])
 ))
+MAX_INPUT_LENGTH = int(os.getenv(
+    "MAX_INPUT_LENGTH",
+    str(_config['llm'].get('max_input_length', 500000))
+))
 
 # Vector Store Configuration (env var overrides YAML)
 NEXTFLOW_DOCS_DIR = os.getenv(

@@ -164,8 +164,14 @@ async def call_gemini_direct(
     system_prompt = _get_system_prompt()
     
     client = LLMClient()
+    # google-genai client is synchronous, run in executor to avoid blocking
+    import asyncio
     try:
-        return await client.complete(messages, system_prompt)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, 
+            lambda: client.complete(messages, system_prompt)
+        )
     except Exception as e:
         import traceback
         print(f"Error calling Gemini: {e}")
@@ -240,6 +246,14 @@ async def chat(message: ChatMessage):
             raise HTTPException(
                 status_code=400,
                 detail="Message cannot be empty"
+            )
+        
+        # Validate input length
+        input_length = len(message.message)
+        if input_length > config.MAX_INPUT_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Input message is too large ({input_length:,} characters). Maximum allowed is {config.MAX_INPUT_LENGTH:,} characters."
             )
         
         session_id = _get_or_create_session(message.session_id)

@@ -10,9 +10,10 @@ api:
 
 # LLM Configuration
 llm:
-  model: "vertex_ai/gemini-2.0-flash-exp"
+  model: "gemini-2.0-flash-exp"  # Vertex AI model name (without 'vertex_ai/' prefix)
   temperature: 0.7
   max_tokens: 500
+  max_input_length: 500000  # Maximum characters allowed in input message
 
 # System Prompt
 system_prompt: |
