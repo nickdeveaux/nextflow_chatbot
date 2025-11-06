@@ -10,10 +10,8 @@ from vector_store.document_loader import prepare_documents_for_indexing
 # Initialize vector store (do this once at startup)
 def initialize_vector_store():
     """Initialize and load vector store."""
-    use_openai = os.getenv("USE_OPENAI_EMBEDDINGS", "false").lower() == "true"
-    
     # Create embedding generator
-    embedding_gen = EmbeddingGenerator(use_openai=use_openai)
+    embedding_gen = EmbeddingGenerator()
     
     # Create vector store
     index_path = os.getenv("VECTOR_INDEX_PATH", "./vector_index.index")

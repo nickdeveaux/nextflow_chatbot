@@ -6,7 +6,7 @@ The vector store architecture replaces keyword-based dictionary lookups with sem
 
 ## Architecture Components
 
-1. **Embeddings**: Convert text to vectors (using OpenAI or sentence-transformers)
+1. **Embeddings**: Convert text to vectors (using sentence-transformers)
 2. **Vector Store**: FAISS index for fast similarity search
 3. **Document Loader**: Chunk and prepare Nextflow documentation
 4. **Search**: Cosine similarity to find most relevant documents
@@ -32,7 +32,7 @@ The vector store architecture replaces keyword-based dictionary lookups with sem
    from vector_store.document_loader import prepare_documents_for_indexing
    
    # At startup
-   embedding_gen = EmbeddingGenerator(use_openai=False)  # or True for OpenAI
+   embedding_gen = EmbeddingGenerator()
    vector_store = FAISSVectorStore(embedding_gen, index_path="./vector_index.index")
    
    # Build index (first time only)
@@ -66,7 +66,6 @@ The vector store architecture replaces keyword-based dictionary lookups with sem
 ## Options
 
 - **Free/Offline**: Use sentence-transformers (included)
-- **Best Quality**: Use OpenAI embeddings (requires API key)
 - **Storage**: FAISS for in-memory, Chroma for persistent
 
 See `VECTOR_STORE_ARCHITECTURE.md` for detailed architecture.

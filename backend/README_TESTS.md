@@ -6,16 +6,41 @@ This directory contains tests for the Nextflow Chat Assistant backend.
 
 ### Prerequisites
 
-Install test dependencies:
+1. **Activate your virtual environment** (important!):
+```bash
+# Make sure you're in the backend directory
+cd backend
+
+# Activate virtual environment
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Verify you're using the correct Python
+python --version  # Should match your venv Python
+```
+
+2. Install test dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 ### Run All Tests
 
+**Important**: Make sure your virtual environment is activated first!
+
 ```bash
+# Activate venv first
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Run all tests
+pytest -v
+
+# Or run specific test files
 pytest test_main.py -v
+pytest test_vector_store.py -v
+pytest test_citations.py -v
+pytest test_config.py -v
 ```
+
 
 ### Run Specific Tests
 
@@ -35,15 +60,40 @@ pytest test_main.py --cov=main --cov-report=html
 
 ## Test Structure
 
-Tests are located in `test_main.py` and cover:
+Tests are located in multiple files:
 
-- **Health endpoint**: Basic health check
-- **Chat endpoint**: Message sending and responses
-- **Session management**: Multi-turn conversations
-- **Citations**: Citation generation
-- **Error handling**: Empty messages, invalid input
-- **Knowledge context**: Vector store integration
-- **Response structure**: Valid response format
+- **test_main.py**: Main API endpoint tests
+  - Health endpoint
+  - Chat endpoint (basic, session, citations)
+  - Error handling
+  - Response structure
+
+- **test_citations.py**: Citation extraction tests
+  - Initialization
+  - Extraction with/without vector store
+  - URL deduplication
+  - Error handling
+
+- **test_config.py**: Configuration tests
+  - All config values are defined
+  - Type validation
+  - Environment variable overrides
+  - Default values
+
+- **test_vector_store.py**: Vector store functionality tests
+  - Index building and initialization
+  - Search functionality
+  - Save/load operations
+  - Metadata handling
+  - Edge cases (empty index, single document, metadata mismatches)
+
+- **test_llm_client.py**: LLM client tests
+  - Initialization with defaults and custom params
+  - Successful completion
+  - System prompt handling
+  - Error handling (empty responses, missing API keys)
+  - Vertex AI credentials setup (JSON and file path)
+  - Context manager usage
 
 ## Environment Variables
 
@@ -59,5 +109,5 @@ export VECTOR_INDEX_PATH="./test_index.index"
 
 - Tests may require the vector store to be initialized (first run may be slow)
 - Some tests may make actual API calls to Gemini (ensure API key is set)
-- Mock mode can be enabled with `USE_MOCK_MODE=true` for faster tests
+- Ensure you're using the correct Python environment (activate venv before running tests)
 

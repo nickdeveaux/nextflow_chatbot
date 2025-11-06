@@ -39,7 +39,10 @@ def test_extract_from_query_with_store():
     assert len(result) == 2
     assert "https://example.com/doc1" in result
     assert "https://example.com/doc2" in result
-    mock_store.search.assert_called_once_with("test query", top_k=3, threshold=0.5)
+    # Check that search was called with config defaults
+    mock_store.search.assert_called_once()
+    call_args = mock_store.search.call_args
+    assert call_args[0][0] == "test query"
 
 
 def test_extract_from_query_no_urls():

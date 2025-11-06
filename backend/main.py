@@ -6,37 +6,41 @@ from contextlib import asynccontextmanager
 import os
 from datetime import datetime
 import uuid
-from litellm import completion
+
+# Set tokenizers parallelism to avoid fork warnings
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 from vector_store.embeddings import EmbeddingGenerator
 from vector_store.faiss_store import FAISSVectorStore
 from vector_store.document_loader import prepare_documents_for_indexing
 from citations import CitationExtractor
+from llm_client import LLMClient
+import config
 
 vector_store_instance: Optional[FAISSVectorStore] = None
 citation_extractor: Optional[CitationExtractor] = None
 
 def _initialize_vector_store():
     """Initialize vector store instance."""
-    global vector_store_instance
-    embedding_gen = EmbeddingGenerator(use_openai=False)
-    docs_dir = os.getenv("NEXTFLOW_DOCS_DIR", "/Users/nickmarveaux/Dev/nextflow/docs")
-    index_path = os.getenv("VECTOR_INDEX_PATH", "./vector_index.index")
-    return FAISSVectorStore(embedding_gen, index_path=index_path)
+    embedding_gen = EmbeddingGenerator()
+    return FAISSVectorStore(
+        embedding_gen, 
+        index_path=config.VECTOR_INDEX_PATH
+    )
 
 
 def _load_or_build_index(vector_store: FAISSVectorStore):
     """Load existing index or build new one."""
-    index_path = os.getenv("VECTOR_INDEX_PATH", "./vector_index.index")
-    data_path = index_path.replace('.index', '.data')
+    data_path = config.VECTOR_INDEX_PATH.replace('.index', '.data')
     
-    if os.path.exists(index_path) and os.path.exists(data_path):
+    if os.path.exists(config.VECTOR_INDEX_PATH) and os.path.exists(data_path):
         print("Loading existing vector store index...")
-        vector_store.load(index_path)
+        vector_store.load(config.VECTOR_INDEX_PATH)
     else:
         print("Building vector store index from documentation...")
-        docs_dir = os.getenv("NEXTFLOW_DOCS_DIR", "/Users/nickmarveaux/Dev/nextflow/docs")
-        texts, metadata = prepare_documents_for_indexing(docs_dir=docs_dir)
+        texts, metadata = prepare_documents_for_indexing(
+            docs_dir=config.NEXTFLOW_DOCS_DIR
+        )
         if texts:
             vector_store.build_index(texts, metadata)
             print(f"Vector store initialized with {len(texts)} chunks")
@@ -92,7 +96,17 @@ def _format_context(results: List) -> str:
     context_parts = []
     seen_urls = set()
     
-    for text, _, metadata in results:
+    for result in results:
+        # Handle tuple format: (text, similarity, metadata)
+        if isinstance(result, tuple) and len(result) >= 3:
+            text, _, metadata = result[:3]
+        else:
+            continue
+        
+        # Ensure metadata is a dict
+        if not isinstance(metadata, dict):
+            metadata = {}
+        
         context_parts.append(text)
         url = metadata.get('url')
         if url and url not in seen_urls:
@@ -110,7 +124,11 @@ def get_knowledge_context(query: str) -> str:
         return ""
     
     try:
-        results = vector_store_instance.search(query, top_k=5, threshold=0.5)
+        results = vector_store_instance.search(
+            query, 
+            top_k=config.VECTOR_SEARCH_TOP_K,
+            threshold=config.VECTOR_SEARCH_THRESHOLD
+        )
         return _format_context(results) if results else ""
     except Exception as e:
         print(f"Error in vector store search: {e}")
@@ -118,24 +136,14 @@ def get_knowledge_context(query: str) -> str:
 
 def _get_system_prompt() -> str:
     """Get Nextflow-specific system prompt."""
-    return """You are a helpful Nextflow documentation assistant. You answer questions about Nextflow with accuracy and clarity.
-
-Nextflow is a workflow management system for data-intensive computational pipelines. It enables scalable and reproducible scientific workflows using a simple DSL (Domain-Specific Language).
-
-Focus on:
-- 70% documentation Q&A about Nextflow features, syntax, and capabilities
-- 30% pragmatic troubleshooting guidance
-
-When you have relevant context from documentation, use it. When something is unknown, be transparent and suggest how to verify it (e.g., check the docs at https://www.nextflow.io/docs/latest/).
-
-Keep responses concise but informative. If asked for citations, provide them."""
+    return config.SYSTEM_PROMPT
 
 
 def _build_messages(conversation_history: List[Dict], query: str, context: str) -> List[Dict]:
     """Build message list for LLM."""
     messages = []
     if conversation_history:
-        for msg in conversation_history[:-1]:
+        for msg in conversation_history:
             messages.append({"role": msg["role"], "content": msg["content"]})
     
     user_message = query
@@ -151,37 +159,31 @@ async def call_gemini_direct(
     conversation_history: Optional[List[Dict]] = None, 
     context: str = ""
 ) -> str:
-    """Call Gemini 2.5 directly via Vertex API."""
-    api_key = os.getenv(
-        "GOOGLE_VERTEX_API_KEY", 
-        "REMOVED"
-    )
-    
+    """Call Gemini directly via LLM client."""
     messages = _build_messages(conversation_history or [], query, context)
+    system_prompt = _get_system_prompt()
     
+    client = LLMClient()
     try:
-        response = completion(
-            model="vertex_ai/gemini-2.0-flash-exp",
-            messages=messages,
-            api_key=api_key,
-            temperature=0.7,
-            max_tokens=500
-        )
-        return response.choices[0].message.content
+        return await client.complete(messages, system_prompt)
     except Exception as e:
+        import traceback
         print(f"Error calling Gemini: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
         raise
 
-async def get_llm_response(messages: List[Dict], context: str) -> str:
+async def get_llm_response(
+    query: str, 
+    conversation_history: List[Dict], 
+    context: str
+) -> str:
     """Get response from LLM with context."""
-    query = messages[-1]["content"]
-    
     try:
-        return await call_gemini_direct(query, messages, context)
+        return await call_gemini_direct(query, conversation_history, context)
     except Exception as e:
         print(f"Error in get_llm_response: {e}")
         try:
-            return await call_gemini_direct(query, messages, "")
+            return await call_gemini_direct(query, conversation_history, "")
         except Exception as e2:
             raise HTTPException(
                 status_code=500, 
@@ -191,9 +193,12 @@ async def get_llm_response(messages: List[Dict], context: str) -> str:
 def _get_or_create_session(session_id: Optional[str]) -> str:
     """Get existing session or create new one."""
     if not session_id:
-        return str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
+    
+    # Ensure session exists in dict
     if session_id not in sessions:
         sessions[session_id] = []
+    
     return session_id
 
 
@@ -230,11 +235,32 @@ def _get_citations(query: str) -> Optional[List[str]]:
 async def chat(message: ChatMessage):
     """Main chat endpoint."""
     try:
+        # Validate message
+        if not message.message or not message.message.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Message cannot be empty"
+            )
+        
         session_id = _get_or_create_session(message.session_id)
+        
+        # Ensure session exists (safety check)
+        if session_id not in sessions:
+            sessions[session_id] = []
+        
+        # Get conversation history (excluding the message we're about to add)
+        conversation_history = sessions[session_id].copy()
+        
+        # Add user message to session
         _add_user_message(session_id, message.message)
         
+        # Get context and generate reply
         context = get_knowledge_context(message.message)
-        reply = await get_llm_response(sessions[session_id], context)
+        reply = await get_llm_response(
+            message.message, 
+            conversation_history, 
+            context
+        )
         
         _add_assistant_message(session_id, reply)
         citations = _get_citations(message.message)
@@ -244,7 +270,12 @@ async def chat(message: ChatMessage):
             session_id=session_id,
             citations=citations
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        print(f"Error processing chat: {e}")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=500, 
             detail=f"Error processing chat: {str(e)}"

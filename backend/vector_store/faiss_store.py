@@ -56,7 +56,15 @@ class FAISSVectorStore:
         
         # Store documents and metadata
         self.documents = documents
-        self.metadata = metadata or [{}] * len(documents)
+        # Ensure metadata list matches documents length
+        if metadata is None:
+            self.metadata = [{}] * len(documents)
+        else:
+            # Pad metadata if shorter than documents
+            if len(metadata) < len(documents):
+                self.metadata = metadata + [{}] * (len(documents) - len(metadata))
+            else:
+                self.metadata = metadata[:len(documents)]
         
         print(f"Index built with {self.index.ntotal} vectors")
         
@@ -83,20 +91,38 @@ class FAISSVectorStore:
         query_embedding = self.embedding_generator.embed(query)
         
         # Normalize for cosine similarity
-        query_embedding = query_embedding.astype('float32')
-        faiss.normalize_L2(query_embedding.reshape(1, -1))
+        # Reshape to 2D array (1 query, dimension features) for FAISS
+        query_embedding = query_embedding.astype('float32').reshape(1, -1)
+        faiss.normalize_L2(query_embedding)
         
-        # Search
+        # Search (query_embedding is now 2D: [1, dimension])
         similarities, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
         
         # Filter by threshold and format results
         results = []
-        for similarity, idx in zip(similarities[0], indices[0]):
+        similarity_array = similarities[0] if len(similarities.shape) > 1 else similarities
+        indices_array = indices[0] if len(indices.shape) > 1 else indices
+        
+        for similarity, idx in zip(similarity_array, indices_array):
             if idx >= 0 and similarity >= threshold:
+                # Ensure idx is within bounds
+                if idx >= len(self.documents):
+                    continue
+                
+                # Get metadata safely
+                if idx < len(self.metadata):
+                    metadata = self.metadata[idx]
+                else:
+                    metadata = {}
+                
+                # Ensure metadata is a dict
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                
                 results.append((
                     self.documents[idx],
                     float(similarity),
-                    self.metadata[idx]
+                    metadata
                 ))
         
         return results
@@ -136,9 +162,19 @@ class FAISSVectorStore:
         if os.path.exists(data_path):
             with open(data_path, 'rb') as f:
                 data = pickle.load(f)
-                self.documents = data['documents']
-                self.metadata = data['metadata']
+                self.documents = data.get('documents', [])
+                self.metadata = data.get('metadata', [])
                 self.dimension = data.get('dimension', self.dimension)
+                
+                # Ensure metadata matches documents length
+                if len(self.metadata) < len(self.documents):
+                    self.metadata.extend([{}] * (len(self.documents) - len(self.metadata)))
+                elif len(self.metadata) > len(self.documents):
+                    self.metadata = self.metadata[:len(self.documents)]
+        else:
+            # If data file doesn't exist, initialize empty
+            self.documents = []
+            self.metadata = []
         
         print(f"Index loaded with {self.index.ntotal} vectors")
     

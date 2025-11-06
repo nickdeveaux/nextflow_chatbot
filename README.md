@@ -11,7 +11,7 @@ A simple TypeScript chat assistant that answers Nextflow documentation Q&A with 
   - Version checking and pinning
 - **Multi-turn conversations**: Maintains context within a session
 - **Responsive UI**: Works on desktop and mobile devices
-- **Mock mode**: Works without API keys for demonstration
+- **Fallback mode**: Works without vector store by calling Gemini directly
 
 ## Tech Stack
 
@@ -27,7 +27,6 @@ A simple TypeScript chat assistant that answers Nextflow documentation Q&A with 
 
 - Node.js 18+ and npm
 - Python 3.9+
-- (Optional) OpenAI API key for full functionality
 
 ### Backend Setup
 
@@ -47,18 +46,23 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Set environment variables:
+4. Set environment variables (optional - defaults are in `config.yaml`):
 ```bash
-# Create .env file or export variables
-export GOOGLE_VERTEX_API_KEY="REMOVED"  # Default key provided
-export NEXTFLOW_DOCS_DIR="/Users/nickmarveaux/Dev/nextflow/docs"  # Path to Nextflow docs
-export VECTOR_INDEX_PATH="./vector_index.index"  # Where to save vector index
+# Required for Vertex AI (if not set in config.yaml):
+export GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
+
+# Optional overrides:
+export GOOGLE_VERTEX_API_KEY="your-key-here"
+export NEXTFLOW_DOCS_DIR="/path/to/docs"
+export VECTOR_INDEX_PATH="./vector_index.index"
 ```
 
+
 **Note**: 
-- The vector store will automatically build an index from your Nextflow docs on first run. This may take a few minutes. Subsequent starts will load the existing index.
-- If the vector store is unavailable, the system will call Gemini directly with a Nextflow-specific prompt.
-- The system uses Gemini 2.5 via Google Vertex API through litellm.
+- Configuration is managed via `config.yaml` (shared between frontend/backend)
+- See [CONFIG.md](./CONFIG.md) for detailed configuration guide
+- The vector store will automatically build an index from your Nextflow docs on first run
+- If the vector store is unavailable, the system will call Gemini directly
 
 5. Run the backend server:
 ```bash
@@ -79,13 +83,18 @@ cd frontend
 npm install
 ```
 
-3. Set environment variables (optional):
+3. Sync configuration from `config.yaml` (auto-runs on build, but can run manually):
+```bash
+npm run sync-config
+```
+
+4. Set environment variables (optional - defaults in `config.yaml`):
 ```bash
 # Create .env.local file
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-4. Run the development server:
+5. Run the development server:
 ```bash
 npm run dev
 ```
@@ -108,9 +117,6 @@ This setup separates concerns and uses the best platform for each service.
    - **Root Directory**: `backend`
    - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 5. Add environment variables in Railway dashboard:
-   - `OPENAI_API_KEY` (optional, for full LLM functionality)
-   - `USE_MOCK_MODE=true` (if not using API key)
-   - `OPENAI_MODEL=gpt-4o-mini` (optional)
 6. Railway will generate a URL like: `https://your-app.railway.app`
 7. Copy this URL - you'll need it for the frontend
 
@@ -171,7 +177,7 @@ app.add_middleware(
 
 **Deployed URL**: [Add your deployed URL here after deployment]
 
-**Note**: The demo uses mock mode if no API key is configured, so it will work without OpenAI credentials.
+**Note**: The demo will call Gemini directly if the vector store is unavailable.
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 
@@ -202,18 +208,27 @@ nextflow_chatbot/
 └── README.md
 ```
 
-## Environment Variables
+## Configuration
 
-### Backend
+The application uses a shared `config.yaml` file for common settings. See [CONFIG.md](./CONFIG.md) for detailed configuration guide.
 
-- `GOOGLE_VERTEX_API_KEY`: Google Vertex API key for Gemini (default provided)
-- `NEXTFLOW_DOCS_DIR`: Path to Nextflow documentation directory
-- `VECTOR_INDEX_PATH`: Path where vector index is saved/loaded
+### Quick Configuration
 
-### Frontend
+Most settings can be configured via environment variables (which override `config.yaml`):
 
-- `NEXT_PUBLIC_API_URL`: Backend API URL (default: `http://localhost:8000`)
-- `NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY`: Google Vertex API key for direct Gemini calls (fallback)
+**Backend:**
+- `GOOGLE_VERTEX_API_KEY`: Google Vertex API key
+- `LLM_MODEL`: LLM model name (default: `vertex_ai/gemini-2.0-flash-exp`)
+- `LLM_TEMPERATURE`: Temperature setting (default: `0.7`)
+- `NEXTFLOW_DOCS_DIR`: Path to Nextflow docs
+- `VECTOR_INDEX_PATH`: Vector index file path
+
+**Frontend:**
+- `NEXT_PUBLIC_API_URL`: Backend API URL
+- `NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY`: Google Vertex API key (for fallback)
+- `NEXT_PUBLIC_GEMINI_MODEL`: Gemini model name
+
+All other settings (system prompt, loading messages, etc.) can be edited in `config.yaml`.
 
 ## Error Handling
 
@@ -221,7 +236,7 @@ The application handles:
 - Network timeouts
 - Invalid API responses
 - Missing backend connections
-- Graceful degradation to mock mode
+- Graceful degradation to direct Gemini calls
 
 ## Testing
 

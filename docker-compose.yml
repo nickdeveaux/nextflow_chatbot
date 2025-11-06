@@ -6,10 +6,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - USE_MOCK_MODE=true
-      - OPENAI_MODEL=gpt-4o-mini
-    # Uncomment and set your API key:
-    # - OPENAI_API_KEY=your-key-here
+      - GOOGLE_VERTEX_API_KEY=your-key-here
+      - NEXTFLOW_DOCS_DIR=/app/docs
+      - VECTOR_INDEX_PATH=/app/vector_index.index
 
   frontend:
     build: ./frontend

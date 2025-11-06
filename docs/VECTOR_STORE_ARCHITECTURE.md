@@ -8,14 +8,9 @@ This document proposes an architecture for replacing the dictionary-based knowle
 
 ### 1. **Embedding Generation**
 - **Purpose**: Convert text (queries and documents) into dense vector representations
-- **Options**:
-  - **OpenAI Embeddings** (`text-embedding-3-small` or `text-embedding-ada-002`)
-    - Pros: High quality, semantic understanding
-    - Cons: Requires API key, costs per embedding
-  - **Sentence Transformers** (`sentence-transformers/all-MiniLM-L6-v2`)
-    - Pros: Free, offline, fast
-    - Cons: Slightly lower quality than OpenAI
-  - **Other**: HuggingFace transformers, Cohere, etc.
+- **Implementation**: **Sentence Transformers** (`sentence-transformers/all-MiniLM-L6-v2`)
+  - Pros: Free, offline, fast, good quality
+  - Cons: Slightly lower quality than paid services (but sufficient for this use case)
 
 ### 2. **Vector Store**
 - **Purpose**: Store document embeddings and enable fast similarity search
@@ -78,20 +73,6 @@ Send to LLM with Context
 
 **Cons**:
 - Requires embedding model download (~80MB)
-- Slightly lower quality than OpenAI embeddings
-
-### Option B: OpenAI Embeddings + FAISS
-
-**Why**: Best quality, but requires API key
-
-**Pros**:
-- High-quality embeddings
-- Better semantic understanding
-
-**Cons**:
-- Requires API key
-- Costs per embedding
-- API dependency
 
 ### Option C: Chroma (Local)
 

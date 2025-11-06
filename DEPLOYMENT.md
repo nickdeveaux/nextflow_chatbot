@@ -8,7 +8,7 @@ This guide walks you through deploying the frontend to Vercel and backend to Rai
 
 - GitHub repository with your code
 - Accounts on [Vercel](https://vercel.com) and [Railway](https://railway.app)
-- (Optional) OpenAI API key
+- Google Vertex API key (see config.yaml for default)
 
 ## Step 1: Deploy Backend to Railway
 
@@ -40,9 +40,9 @@ This guide walks you through deploying the frontend to Vercel and backend to Rai
 In Railway dashboard → Variables tab, add:
 
 ```
-OPENAI_API_KEY=your-key-here  # Optional
-USE_MOCK_MODE=true            # Set to true if no API key
-OPENAI_MODEL=gpt-4o-mini      # Optional
+GOOGLE_VERTEX_API_KEY=your-key-here  # Required for LLM calls
+NEXTFLOW_DOCS_DIR=/path/to/docs      # Optional, for vector store
+VECTOR_INDEX_PATH=./vector_index.index  # Optional
 ```
 
 ### 1.5 Get Backend URL

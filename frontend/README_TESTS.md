@@ -36,13 +36,21 @@ npm test -- --coverage
 
 ## Test Structure
 
-Tests are located in `__tests__/page.test.tsx` and cover:
+Tests are located in `__tests__/`:
 
-- **Rendering**: Header, welcome message, input, buttons
-- **User interactions**: Sending messages, button states
-- **API integration**: Fetch calls, error handling
-- **Theme toggle**: Dark mode functionality
-- **Error handling**: Network errors, fallback behavior
+- **page.test.tsx**: Main component tests
+  - Rendering (header, welcome message, input, buttons)
+  - User interactions (sending messages, button states)
+  - API integration (fetch calls, error handling)
+  - Theme toggle (dark mode functionality)
+  - Citations display
+  - Keyboard shortcuts (Enter to send)
+
+- **config.test.ts**: Configuration tests
+  - All config values are defined
+  - Type validation
+  - URL building functions
+  - Default values
 
 ## Configuration
 

@@ -4,18 +4,33 @@ Run with: pytest test_main.py -v
 """
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch, AsyncMock
 from main import app
 import os
 
-client = TestClient(app)
 
-def test_health_endpoint():
+@pytest.fixture
+def client():
+    """Create test client fixture."""
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_llm_client():
+    """Mock LLM client to avoid real API calls in tests."""
+    with patch('main.LLMClient') as mock:
+        mock_instance = AsyncMock()
+        mock_instance.complete = AsyncMock(return_value="This is a test response about Nextflow.")
+        mock.return_value = mock_instance
+        yield mock_instance
+
+def test_health_endpoint(client):
     """Test the health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-def test_chat_endpoint_basic():
+def test_chat_endpoint_basic(client, mock_llm_client):
     """Test basic chat endpoint functionality."""
     response = client.post(
         "/chat",
@@ -28,7 +43,7 @@ def test_chat_endpoint_basic():
     assert isinstance(data["reply"], str)
     assert len(data["reply"]) > 0
 
-def test_chat_endpoint_with_session():
+def test_chat_endpoint_with_session(client, mock_llm_client):
     """Test chat endpoint maintains session context."""
     # First message
     response1 = client.post(
@@ -52,7 +67,7 @@ def test_chat_endpoint_with_session():
     assert data2["session_id"] == session_id
     assert "reply" in data2
 
-def test_chat_endpoint_citations():
+def test_chat_endpoint_citations(client, mock_llm_client):
     """Test that citations are returned when available."""
     response = client.post(
         "/chat",
@@ -66,7 +81,7 @@ def test_chat_endpoint_citations():
         assert isinstance(data["citations"], list)
         assert len(data["citations"]) > 0
 
-def test_chat_endpoint_empty_message():
+def test_chat_endpoint_empty_message(client):
     """Test chat endpoint handles empty messages."""
     response = client.post(
         "/chat",
@@ -75,7 +90,7 @@ def test_chat_endpoint_empty_message():
     # Should still process, but may return empty or error
     assert response.status_code in [200, 400, 422]
 
-def test_chat_endpoint_dsl2_question():
+def test_chat_endpoint_dsl2_question(client, mock_llm_client):
     """Test chat endpoint with DSL2 syntax question."""
     response = client.post(
         "/chat",
@@ -86,7 +101,7 @@ def test_chat_endpoint_dsl2_question():
     assert "reply" in data
     assert len(data["reply"]) > 0
 
-def test_chat_endpoint_executor_question():
+def test_chat_endpoint_executor_question(client, mock_llm_client):
     """Test chat endpoint with executor question."""
     response = client.post(
         "/chat",
@@ -107,7 +122,7 @@ async def test_get_knowledge_context():
     # Context may be empty if vector store not initialized, which is OK
     assert isinstance(context, str)
 
-def test_chat_response_structure():
+def test_chat_response_structure(client, mock_llm_client):
     """Test that chat response has correct structure."""
     response = client.post(
         "/chat",
@@ -121,8 +136,27 @@ def test_chat_response_structure():
     assert "session_id" in data
     assert isinstance(data["reply"], str)
     assert isinstance(data["session_id"], str)
+    assert len(data["reply"]) > 0
+    assert len(data["session_id"]) > 0
     
     # Check optional fields
     if "citations" in data:
         assert data["citations"] is None or isinstance(data["citations"], list)
+        if data["citations"]:
+            for citation in data["citations"]:
+                assert isinstance(citation, str)
+                assert citation.startswith("http")
+
+
+def test_chat_endpoint_with_citations_request(client, mock_llm_client):
+    """Test citations are returned when requested."""
+    response = client.post(
+        "/chat",
+        json={"message": "Can you cite that?"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Citations may or may not be present depending on vector store
+    if data.get("citations"):
+        assert isinstance(data["citations"], list)
 

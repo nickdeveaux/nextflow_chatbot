@@ -53,3 +53,7 @@ yarn-error.log*
 vector_index.index
 vector_index.data
 
+# Config overrides (keep config.yaml, but ignore local overrides)
+config.local.yaml
+config.override.yaml
+

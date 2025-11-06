@@ -1,0 +1,57 @@
+# Shared configuration for Nextflow Chat Assistant
+# Values can be overridden via environment variables
+
+# API Configuration
+api:
+  google_vertex_api_key: "REMOVED"
+  google_cloud_project: "white-academy-476808-f4"  # Set your GCP project ID here or via GOOGLE_CLOUD_PROJECT env var
+  gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
+  gemini_model: "gemini-2.0-flash-exp"
+
+# LLM Configuration
+llm:
+  model: "vertex_ai/gemini-2.0-flash-exp"
+  temperature: 0.7
+  max_tokens: 500
+
+# System Prompt
+system_prompt: |
+  You are a helpful Nextflow documentation assistant. You answer questions about Nextflow with accuracy and clarity.
+
+  Nextflow is a workflow management system for data-intensive computational pipelines. It enables scalable and reproducible scientific workflows using a simple DSL (Domain-Specific Language).
+
+  Focus on:
+  - 70% documentation Q&A about Nextflow features, syntax, and capabilities
+  - 30% pragmatic troubleshooting guidance
+
+  When you have relevant context from documentation, use it. When something is unknown, be transparent and suggest how to verify it (e.g., check the docs at https://www.nextflow.io/docs/latest/).
+
+  Keep responses concise but informative. If asked for citations, provide them.
+
+# Vector Store Configuration
+vector_store:
+  nextflow_docs_dir: "/Users/nickmarveaux/Dev/nextflow/docs"
+  index_path: "./vector_index.index"
+  search_top_k: 5
+  search_threshold: 0.5
+
+# Default Citations
+default_citations:
+  - "https://www.nextflow.io/docs/latest/"
+  - "https://www.nextflow.io/docs/latest/dsl2.html"
+  - "https://github.com/nextflow-io/nextflow"
+
+# Frontend Configuration
+frontend:
+  loading_messages:
+    - "Thinking"
+    - "Pondering"
+    - "Noodling"
+    - "Considering"
+    - "Examining"
+    - "Researching"
+    - "Reflecting"
+    - "Evaluating"
+    - "Deliberating"
+  api_url: "http://localhost:8000"
+

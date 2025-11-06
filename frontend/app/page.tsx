@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { 
+  API_URL, 
+  LOADING_MESSAGES, 
+  SYSTEM_PROMPT, 
+  getGeminiApiUrl 
+} from '../config'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -13,18 +19,6 @@ interface CitationRef {
   url: string
 }
 
-const LOADING_MESSAGES = [
-  'Thinking',
-  'Pondering',
-  'Noodling',
-  'Considering',
-  'Examining',
-  'Researching',
-  'Reflecting',
-  'Evaluating',
-  'Deliberating',
-]
-
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -35,8 +29,6 @@ export default function Home() {
   const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
   useEffect(() => {
     // Check for saved theme preference or default to system preference
@@ -119,22 +111,8 @@ export default function Home() {
   }, [input])
 
   const callGeminiDirect = async (query: string, conversationHistory: Message[] = []): Promise<string> => {
-    const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY || 'REMOVED'
-    
-    const systemPrompt = `You are a helpful Nextflow documentation assistant. You answer questions about Nextflow with accuracy and clarity.
-
-Nextflow is a workflow management system for data-intensive computational pipelines. It enables scalable and reproducible scientific workflows using a simple DSL (Domain-Specific Language).
-
-Focus on:
-- 70% documentation Q&A about Nextflow features, syntax, and capabilities
-- 30% pragmatic troubleshooting guidance
-
-When something is unknown, be transparent and suggest how to verify it (e.g., check the docs at https://www.nextflow.io/docs/latest/).
-
-Keep responses concise but informative.`
-
     const messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: SYSTEM_PROMPT },
       ...conversationHistory.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content
@@ -142,7 +120,7 @@ Keep responses concise but informative.`
       { role: 'user', content: query }
     ]
 
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + API_KEY, {
+    const response = await fetch(getGeminiApiUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -152,7 +130,7 @@ Keep responses concise but informative.`
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }]
         })),
-        systemInstruction: { parts: [{ text: systemPrompt }] }
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
       }),
     })
 
