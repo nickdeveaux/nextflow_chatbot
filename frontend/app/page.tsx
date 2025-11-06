@@ -8,6 +8,11 @@ interface Message {
   citations?: string[]
 }
 
+interface CitationRef {
+  index: number
+  url: string
+}
+
 const LOADING_MESSAGES = [
   'Thinking',
   'Pondering',
@@ -113,6 +118,52 @@ export default function Home() {
     }
   }, [input])
 
+  const callGeminiDirect = async (query: string, conversationHistory: Message[] = []): Promise<string> => {
+    const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY || 'REMOVED'
+    
+    const systemPrompt = `You are a helpful Nextflow documentation assistant. You answer questions about Nextflow with accuracy and clarity.
+
+Nextflow is a workflow management system for data-intensive computational pipelines. It enables scalable and reproducible scientific workflows using a simple DSL (Domain-Specific Language).
+
+Focus on:
+- 70% documentation Q&A about Nextflow features, syntax, and capabilities
+- 30% pragmatic troubleshooting guidance
+
+When something is unknown, be transparent and suggest how to verify it (e.g., check the docs at https://www.nextflow.io/docs/latest/).
+
+Keep responses concise but informative.`
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      })),
+      { role: 'user', content: query }
+    ]
+
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + API_KEY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: messages.filter(m => m.role !== 'system').map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.content }]
+        })),
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.candidates[0].content.parts[0].text
+  }
+
   const handleSend = async () => {
     if (!input.trim() || loading) return
 
@@ -158,10 +209,25 @@ export default function Home() {
         },
       ])
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-      setError(`Failed to send message: ${errorMessage}. Please check if the backend is running.`)
-      // Remove the user message on error
-      setMessages(messages)
+      // If backend is down, try calling Gemini directly
+      try {
+        console.log('Backend unavailable, calling Gemini directly...')
+        const geminiResponse = await callGeminiDirect(userMessage, messages)
+        setMessages([
+          ...newMessages,
+          {
+            role: 'assistant',
+            content: geminiResponse,
+            citations: ['https://www.nextflow.io/docs/latest/'],
+          },
+        ])
+        setError(null)
+      } catch (geminiErr) {
+        const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+        setError(`Failed to send message: ${errorMessage}. Backend and Gemini fallback both unavailable.`)
+        // Remove the user message on error
+        setMessages(messages)
+      }
     } finally {
       setLoading(false)
     }
@@ -204,23 +270,65 @@ export default function Home() {
           </div>
         )}
 
-        {messages.map((message, index) => (
-          <div key={index} className={`message ${message.role}`}>
-            <div className="message-content">
-              <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
-              {message.citations && message.citations.length > 0 && (
-                <div className="message-citations">
-                  <strong>Citations:</strong>
-                  {message.citations.map((citation, i) => (
-                    <a key={i} href={citation} target="_blank" rel="noopener noreferrer">
-                      {citation}
-                    </a>
-                  ))}
+        {messages.map((message, index) => {
+          const citations = message.citations || []
+          const citationRefs: CitationRef[] = []
+          const urlToIndex = new Map<string, number>()
+          
+          // Build citation map
+          citations.forEach((url) => {
+            if (!urlToIndex.has(url)) {
+              const refNum = urlToIndex.size + 1
+              urlToIndex.set(url, refNum)
+              citationRefs.push({ index: refNum, url })
+            }
+          })
+          
+          return (
+            <div key={index} className={`message ${message.role}`}>
+              <div className="message-content">
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                  {citationRefs.length > 0 && (
+                    <span className="citation-inline">
+                      {citationRefs.map((ref) => (
+                        <a
+                          key={ref.index}
+                          href={ref.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="citation-link"
+                          title={ref.url}
+                        >
+                          <sup>{ref.index}</sup>
+                        </a>
+                      ))}
+                    </span>
+                  )}
                 </div>
-              )}
+                {citationRefs.length > 0 && (
+                  <div className="message-citations">
+                    <div className="citation-list">
+                      {citationRefs.map((ref) => (
+                        <div key={ref.index} className="citation-item">
+                          <sup className="citation-number">{ref.index}</sup>
+                          <a
+                            href={ref.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="citation-url"
+                          >
+                            {ref.url}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {loading && (
           <div className="message assistant">

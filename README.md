@@ -17,8 +17,9 @@ A simple TypeScript chat assistant that answers Nextflow documentation Q&A with 
 
 - **Frontend**: Next.js 14 with TypeScript, React
 - **Backend**: FastAPI (Python)
-- **LLM**: OpenAI GPT (with mock mode fallback)
+- **LLM**: Gemini 2.5 via Google Vertex API (using litellm)
 - **Vector Store**: FAISS with sentence-transformers for semantic search (free, offline)
+- **Fallback**: Direct Gemini calls when vector store or backend unavailable
 
 ## Local Setup
 
@@ -49,14 +50,15 @@ pip install -r requirements.txt
 4. Set environment variables:
 ```bash
 # Create .env file or export variables
-export OPENAI_API_KEY="your-api-key-here"  # Optional
-export USE_MOCK_MODE="true"  # Set to "true" to use mock mode without API key
-export OPENAI_MODEL="gpt-4o-mini"  # Optional, defaults to gpt-4o-mini
+export GOOGLE_VERTEX_API_KEY="REMOVED"  # Default key provided
 export NEXTFLOW_DOCS_DIR="/Users/nickmarveaux/Dev/nextflow/docs"  # Path to Nextflow docs
 export VECTOR_INDEX_PATH="./vector_index.index"  # Where to save vector index
 ```
 
-**Note**: The vector store will automatically build an index from your Nextflow docs on first run. This may take a few minutes. Subsequent starts will load the existing index.
+**Note**: 
+- The vector store will automatically build an index from your Nextflow docs on first run. This may take a few minutes. Subsequent starts will load the existing index.
+- If the vector store is unavailable, the system will call Gemini directly with a Nextflow-specific prompt.
+- The system uses Gemini 2.5 via Google Vertex API through litellm.
 
 5. Run the backend server:
 ```bash
@@ -204,13 +206,14 @@ nextflow_chatbot/
 
 ### Backend
 
-- `OPENAI_API_KEY`: Your OpenAI API key (optional, enables full LLM)
-- `USE_MOCK_MODE`: Set to `"true"` to use mock responses (works without API key)
-- `OPENAI_MODEL`: Model to use (default: `"gpt-4o-mini"`)
+- `GOOGLE_VERTEX_API_KEY`: Google Vertex API key for Gemini (default provided)
+- `NEXTFLOW_DOCS_DIR`: Path to Nextflow documentation directory
+- `VECTOR_INDEX_PATH`: Path where vector index is saved/loaded
 
 ### Frontend
 
 - `NEXT_PUBLIC_API_URL`: Backend API URL (default: `http://localhost:8000`)
+- `NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY`: Google Vertex API key for direct Gemini calls (fallback)
 
 ## Error Handling
 
@@ -220,13 +223,31 @@ The application handles:
 - Missing backend connections
 - Graceful degradation to mock mode
 
+## Testing
+
+See test documentation:
+- **Backend tests**: [backend/README_TESTS.md](./backend/README_TESTS.md)
+- **Frontend tests**: [frontend/README_TESTS.md](./frontend/README_TESTS.md)
+
+Run backend tests:
+```bash
+cd backend
+pytest test_main.py -v
+```
+
+Run frontend tests:
+```bash
+cd frontend
+npm test
+```
+
 ## Limitations
 
 - No data persistence across app restarts
 - No user authentication
 - No cross-session history
 - In-memory session storage only
-- Mock mode has limited knowledge compared to full LLM
+- Vector store index must be rebuilt if docs change
 
 ## License
 
