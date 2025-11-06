@@ -2,11 +2,14 @@
 LLM client for calling Gemini via Vertex AI using google-genai SDK.
 """
 import os
+import logging
 from typing import List, Dict, Optional
 from google import genai
 import config
 from google.genai import types
 from google.oauth2 import service_account
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -115,6 +118,17 @@ class LLMClient:
         
         gen_config = types.GenerateContentConfig(**gen_config_params)
         
+        # Log full message sent to LLM
+        logger.debug(f"Sending to LLM (model={self.model}):")
+        logger.debug(f"  System instruction: {system_prompt if system_prompt else 'None'}")
+        logger.debug(f"  Contents ({len(contents)} messages):")
+        for i, content in enumerate(contents):
+            role = content.role
+            text = content.parts[0].text if content.parts else ""
+            text_preview = text[:200] + "..." if len(text) > 200 else text
+            logger.debug(f"    [{i+1}] {role}: {text_preview}")
+        logger.debug(f"  Config: max_output_tokens={self.max_tokens}")
+        
         resp = self.client.models.generate_content(
             model=self.model,
             contents=contents,
@@ -124,12 +138,6 @@ class LLMClient:
         if not resp.text:
             raise ValueError("Empty response from LLM")
         
+        logger.debug(f"Received response ({len(resp.text)} chars): {resp.text[:200]}...")
+        
         return resp.text
-    
-    def __enter__(self):
-        """Context manager entry."""
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        return False

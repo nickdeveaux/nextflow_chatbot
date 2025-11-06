@@ -185,7 +185,7 @@ def test_llm_client_empty_response(mock_genai_client, sample_messages):
 
 
 def test_llm_client_context_manager(mock_genai_client, sample_messages):
-    """Test LLM client as context manager."""
+    """Test LLM client can be instantiated (context manager removed)."""
     mock_response = MagicMock()
     mock_response.text = "Response"
     
@@ -198,9 +198,9 @@ def test_llm_client_context_manager(mock_genai_client, sample_messages):
     
     with patch('os.path.exists', return_value=True), \
          patch('llm_client.service_account.Credentials.from_service_account_file'):
-        with LLMClient(project_id="test-project", service_account_path="test.json") as client:
-            result = client.complete(sample_messages)
-            assert result == "Response"
+        client = LLMClient(project_id="test-project", service_account_path="test.json")
+        result = client.complete(sample_messages)
+        assert result == "Response"
 
 
 def test_llm_client_multi_turn_conversation(mock_genai_client):

@@ -4,11 +4,19 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from contextlib import asynccontextmanager
 import os
+import logging
 from datetime import datetime
 import uuid
 
 # Set tokenizers parallelism to avoid fork warnings
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+# Setup logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 from vector_store.embeddings import EmbeddingGenerator
 from vector_store.faiss_store import FAISSVectorStore
@@ -121,6 +129,7 @@ def get_knowledge_context(query: str) -> str:
     global vector_store_instance
     
     if not vector_store_instance:
+        logger.debug("Vector store not initialized, returning empty context")
         return ""
     
     try:
@@ -129,9 +138,23 @@ def get_knowledge_context(query: str) -> str:
             top_k=config.VECTOR_SEARCH_TOP_K,
             threshold=config.VECTOR_SEARCH_THRESHOLD
         )
+        
+        # Log retrieved documents
+        logger.debug(f"Vector search for query: '{query[:100]}...'")
+        logger.debug(f"Found {len(results)} results (top_k={config.VECTOR_SEARCH_TOP_K}, threshold={config.VECTOR_SEARCH_THRESHOLD})")
+        for i, result in enumerate(results):
+            if isinstance(result, tuple) and len(result) >= 3:
+                text, similarity, metadata = result[:3]
+                text_preview = text[:150] + "..." if len(text) > 150 else text
+                url = metadata.get('url', 'N/A') if isinstance(metadata, dict) else 'N/A'
+                logger.debug(f"  [{i+1}] Similarity: {similarity:.3f}, URL: {url}")
+                logger.debug(f"      Text: {text_preview}")
+            else:
+                logger.debug(f"  [{i+1}] Result: {result}")
+        
         return _format_context(results) if results else ""
     except Exception as e:
-        print(f"Error in vector store search: {e}")
+        logger.error(f"Error in vector store search: {e}", exc_info=True)
         return ""
 
 def _get_system_prompt() -> str:
