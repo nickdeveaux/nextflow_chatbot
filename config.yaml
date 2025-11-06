@@ -3,7 +3,7 @@
 
 # API Configuration
 api:
-  google_vertex_api_key: "REMOVED"
+  google_vertex_api_key: "backend/white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file
   google_cloud_project: "white-academy-476808-f4"  # Set your GCP project ID here or via GOOGLE_CLOUD_PROJECT env var
   gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
   gemini_model: "gemini-2.0-flash-exp"

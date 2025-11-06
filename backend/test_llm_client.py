@@ -24,21 +24,32 @@ def sample_messages():
 
 def test_llm_client_initialization():
     """Test LLM client initialization with defaults."""
-    with patch('llm_client.genai.Client') as mock_client:
+    with patch('llm_client.genai.Client') as mock_client, \
+         patch('llm_client.google.auth.default') as mock_auth:
+        # Mock credentials
+        mock_creds = MagicMock()
+        mock_auth.return_value = (mock_creds, None)
+        
         client = LLMClient()
         assert client.model == config.LLM_MODEL
         assert client.project_id == config.GOOGLE_CLOUD_PROJECT
         assert client.max_tokens == config.LLM_MAX_TOKENS
-        mock_client.assert_called_once_with(
-            vertexai=True,
-            project=config.GOOGLE_CLOUD_PROJECT,
-            location="us-central1"
-        )
+        # Check that credentials were passed
+        call_kwargs = mock_client.call_args[1]
+        assert call_kwargs["vertexai"] is True
+        assert call_kwargs["project"] == config.GOOGLE_CLOUD_PROJECT
+        assert call_kwargs["location"] == "us-central1"
+        assert "credentials" in call_kwargs
 
 
 def test_llm_client_custom_params():
     """Test LLM client with custom parameters."""
-    with patch('llm_client.genai.Client') as mock_client:
+    with patch('llm_client.genai.Client') as mock_client, \
+         patch('llm_client.google.auth.default') as mock_auth:
+        # Mock credentials
+        mock_creds = MagicMock()
+        mock_auth.return_value = (mock_creds, None)
+        
         client = LLMClient(
             model="test-model",
             project_id="test-project",
@@ -49,11 +60,12 @@ def test_llm_client_custom_params():
         assert client.project_id == "test-project"
         assert client.location == "us-west1"
         assert client.max_tokens == 100
-        mock_client.assert_called_once_with(
-            vertexai=True,
-            project="test-project",
-            location="us-west1"
-        )
+        # Check that credentials were passed
+        call_kwargs = mock_client.call_args[1]
+        assert call_kwargs["vertexai"] is True
+        assert call_kwargs["project"] == "test-project"
+        assert call_kwargs["location"] == "us-west1"
+        assert "credentials" in call_kwargs
 
 
 def test_llm_client_no_project_id():
@@ -113,13 +125,19 @@ def test_llm_client_with_system_prompt(mock_genai_client, sample_messages):
     result = client.complete(sample_messages, system_prompt="You are a helpful assistant.")
     
     assert result == "Response"
-    # Check that system prompt was added as first content
+    # Check that system prompt was passed in config.system_instruction
     call_args = mock_models.generate_content.call_args
-    contents = call_args[1]["contents"]
-    assert contents[0]["role"] == "system"
-    assert contents[0]["text"] == "You are a helpful assistant."
-    assert contents[1]["role"] == "user"
-    assert contents[1]["text"] == sample_messages[0]["content"]
+    call_kwargs = call_args[1]
+    # System instruction should be in config
+    config = call_kwargs["config"]
+    assert config.system_instruction is not None
+    assert config.system_instruction.role == "system"
+    assert config.system_instruction.parts[0].text == "You are a helpful assistant."
+    # User message should be in contents
+    contents = call_kwargs["contents"]
+    assert len(contents) == 1
+    assert contents[0].role == "user"
+    assert contents[0].parts[0].text == sample_messages[0]["content"]
 
 
 def test_llm_client_empty_response(mock_genai_client, sample_messages):
@@ -182,6 +200,6 @@ def test_llm_client_multi_turn_conversation(mock_genai_client):
     call_args = mock_models.generate_content.call_args
     contents = call_args[1]["contents"]
     assert len(contents) == 3
-    assert contents[0]["role"] == "user"
-    assert contents[1]["role"] == "assistant"
-    assert contents[2]["role"] == "user"
+    assert contents[0].role == "user"
+    assert contents[1].role == "assistant"
+    assert contents[2].role == "user"

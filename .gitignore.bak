@@ -5,6 +5,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+*.json
 
 # Environment
 .env
@@ -57,6 +58,4 @@ vector_index.data
 config.local.yaml
 config.override.yaml
 
-# Service account credentials
-backend/*-*.json
-**/service-account*.json
+*.json
