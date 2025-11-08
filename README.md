@@ -36,7 +36,9 @@ See [Deployment Guide](docs/deployment.md) for detailed deployment instructions.
 
 ### Process:
 
-Claude Code and Cursor were used extensively for the first half of the project (green field), but when it came to brown-field improvements, deployment optimization and troubleshooting, and the llm libraries, I had to work on those by hand. These **Author's Notes** are a chance for me to write unfiltered by compilers or llms!
+These **Author's Notes** are a chance for me to write unfiltered by compilers or llms!
+
+Claude Code and Cursor were used extensively for the first half of the project (green field), but when it came to brown-field improvements, deployment optimization and troubleshooting, and the llm libraries, I had to work on those by hand. 
 
 I chose python logic and sentence-transformers because I have experience with both of those libraries. I've only used typescript here and there before, but I like it, and wanted to try it -- however the frontend is where I relied the most on Claude. 
 
@@ -46,11 +48,11 @@ I had a scraper and started scraping the discussions on GitHub and Seqera’s si
 
 I also previously had a check on GPU to see which version of torch to install, but once I was able to fit the CPU-version into Railway, I realized I could make the code simpler by making it always use the most minimal requirements doc (not having to download Nvidia libs). 
 
-Also, since I used Railway and local development, I removed my docker-compose.yml file to have one less thing to maintain. (Note: The project structure still references it as an optional local development option.) 
+Also, since I used Railway and local development, I removed my docker-compose.yml file to have one less thing to maintain. 
 
 ### Compromises:
 
-I also was happy to have been able to put all my config in a .yaml, but then I realized Vercel only uses code in the front end directory, so I think in retrospect it might have been simpler to repeat my front-end config instead of trying to port it over from the yaml. 
+I was at first happy to have been able to put all my config in a .yaml, but then I realized Vercel only uses code in the front end directory, so I think in retrospect it might have been simpler to repeat my front-end config instead of trying to port it over from the yaml with config-porting scripts. 
 
 I used Google’s LLM because I have a 90 day free trial with Google Cloud. In retrospect, it might have been interesting to test others, but my instinct is that it won’t make too much of a difference. In order to now become too enmeshed with it, I implemented conversation history tracking without having to rely on it to give me a conversation ID, which makes the gen-ai library more replaceable. 
 
@@ -117,7 +119,6 @@ docs/                          # Documentation
 └── ...                        # Other documentation
 
 config.yaml                    # Shared configuration
-docker-compose.yml             # Docker Compose config
 README.md                      # Main documentation
 ```
 
