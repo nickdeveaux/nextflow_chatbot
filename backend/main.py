@@ -72,23 +72,38 @@ def _initialize_vector_store():
     # Only imported when actually needed to avoid loading heavy dependencies if vector store disabled
     try:
         from vector_store.embeddings import EmbeddingGenerator
+        print("Creating EmbeddingGenerator...")
         embedding_gen = EmbeddingGenerator()
+        print("✓ EmbeddingGenerator created successfully")
     except ImportError as e:
+        error_msg = f"sentence-transformers not available: {e}"
         if index_exists:
-            logger.warning(f"sentence-transformers not available: {e}")
+            logger.warning(error_msg)
             logger.warning("Vector search requires sentence-transformers for query embeddings")
         else:
-            logger.error(f"sentence-transformers not available: {e}")
-            logger.error("Cannot build index. Install with: pip install -r requirements-build-index.txt")
+            logger.error(error_msg)
+            logger.error("Cannot build index. Ensure sentence-transformers is installed (included in requirements.txt)")
+        print(f"ERROR: {error_msg}")
         return None
     except Exception as e:
-        logger.error(f"Error initializing embedding generator: {e}")
+        error_msg = f"Error initializing embedding generator: {e}"
+        logger.error(error_msg)
+        print(f"ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
         return None
     
     try:
-        return FAISSVectorStore(embedding_gen, index_path=index_path)
+        print(f"Creating FAISSVectorStore with index_path: {index_path}")
+        vector_store = FAISSVectorStore(embedding_gen, index_path=index_path)
+        print(f"✓ FAISSVectorStore created (index loaded: {vector_store.index is not None and vector_store.index.ntotal > 0 if vector_store.index else False})")
+        return vector_store
     except Exception as e:
-        logger.error(f"Error creating FAISSVectorStore: {e}")
+        error_msg = f"Error creating FAISSVectorStore: {e}"
+        logger.error(error_msg)
+        print(f"ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
         return None
 
 

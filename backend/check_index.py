@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Check if vector index exists and report status.
-Used at installation time to determine if requirements-build-index.txt is needed.
 """
 import os
 import sys
@@ -41,12 +40,11 @@ def check_index():
         data_size = os.path.getsize(data_path) / (1024 * 1024)  # MB
         print(f"Index size: {index_size:.2f} MB")
         print(f"Data size: {data_size:.2f} MB")
-        print("\n✓ Index files found - no need to install requirements-build-index.txt")
-        print("  Production runtime only needs: requirements.txt")
+        print("\n✓ Index files found - ready for vector search")
         return 0
     else:
         print("\n✗ Index files not found")
-        print("  To build index, install: requirements-build-index.txt")
+        print("  To build index: Set BUILD_INDEX=true and NEXTFLOW_DOCS_DIR")
         print("  Or commit pre-built index files to repository")
         return 1
 
