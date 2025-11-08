@@ -108,6 +108,12 @@ cors:
     - "https://12.202.180.110:3000"
     - "http://12.202.180.110:80"
     - "https://12.202.180.110:443"
+    - "http://localhost:3000"  # Local development (Next.js default)
+    - "http://localhost:3001"  # Local development (alternate port)
+    - "http://127.0.0.1:3000"  # Local development
+    - "http://127.0.0.1:3001"  # Local development (alternate port)
+    - "http://localhost"  # For accessing frontend via localhost
+    - "http://127.0.0.1"  # For accessing frontend via 127.0.0.1
   allow_vercel_domains: true  # Allow all *.vercel.app domains via regex (env: CORS_ALLOW_VERCEL_DOMAINS)
   vercel_domain_regex: "https?://.*\\.vercel\\.app.*"  # Regex pattern for Vercel domains (env: CORS_VERCEL_DOMAIN_REGEX)
   allow_credentials: true  # Allow credentials in CORS requests (env: CORS_ALLOW_CREDENTIALS)
@@ -126,5 +132,7 @@ frontend:
     - "Reflecting"
     - "Evaluating"
     - "Deliberating"
-  api_url: "http://localhost:8000"
+  api_url: "http://localhost:8000"  # Default for local dev - override with NEXT_PUBLIC_API_URL env var
+  # For IP access (12.202.180.110): Set NEXT_PUBLIC_API_URL=http://12.202.180.110:8000
+  # For Railway: Set NEXT_PUBLIC_API_URL=https://your-backend.railway.app
 
