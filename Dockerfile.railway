@@ -101,25 +101,11 @@ RUN apt-get update && apt-get install -y \
 COPY --from=backend-setup /app ./
 
 # Copy frontend standalone build
-# Next.js standalone output: .next/standalone/ contains server.js and node_modules
-# The structure is: .next/standalone/[package-name]/server.js or .next/standalone/server.js
-# We'll copy the entire standalone directory and handle structure in the startup script
+# Next.js standalone output structure varies - we'll handle it in the startup script
 RUN mkdir -p /app/frontend-standalone
-COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend-standalone-temp
+COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend-standalone
 COPY --from=frontend-builder /app/frontend/.next/static ./frontend-standalone/.next/static
 COPY --from=frontend-builder /app/frontend/public ./frontend-standalone/public
-
-# Next.js standalone might nest the server.js in a subdirectory
-# Find and copy server.js to the right location
-RUN if [ -f ./frontend-standalone-temp/server.js ]; then \
-    cp -r ./frontend-standalone-temp/* ./frontend-standalone/; \
-    elif [ -f ./frontend-standalone-temp/frontend/server.js ]; then \
-    cp -r ./frontend-standalone-temp/frontend/* ./frontend-standalone/; \
-    elif [ -d ./frontend-standalone-temp ]; then \
-    find ./frontend-standalone-temp -name "server.js" -exec cp --parents {} ./frontend-standalone/ \; && \
-    find ./frontend-standalone-temp -type d -name "node_modules" -exec cp -r --parents {} ./frontend-standalone/ \; 2>/dev/null || true; \
-    fi && \
-    rm -rf ./frontend-standalone-temp
 
 # Create simple reverse proxy server
 RUN cat > /app/proxy.js << 'EOFJS'
@@ -213,23 +199,40 @@ done
 echo "Starting Next.js frontend on port 3000..."
 cd /app/frontend-standalone
 
-# Find server.js (it might be in the current dir or a subdirectory)
-SERVER_JS=$(find . -name "server.js" -type f | head -1)
-if [ -z "$SERVER_JS" ]; then
-  echo "ERROR: server.js not found in frontend-standalone directory"
-  echo "Directory structure:"
-  find . -type f -name "*.js" | head -10
-  echo "Full directory contents:"
-  ls -laR . | head -50
-  exit 1
+# Next.js standalone structure: server.js might be in root or a subdirectory
+# Common structures:
+# - .next/standalone/server.js
+# - .next/standalone/frontend/server.js
+# - .next/standalone/[package-name]/server.js
+
+# Try to find and use server.js
+if [ -f server.js ]; then
+  echo "Found server.js in frontend-standalone root"
+  SERVER_PATH="./server.js"
+elif [ -f frontend/server.js ]; then
+  echo "Found server.js in frontend subdirectory"
+  cd frontend
+  SERVER_PATH="./server.js"
+else
+  # Search for server.js
+  SERVER_JS=$(find . -name "server.js" -type f 2>/dev/null | head -1)
+  if [ -z "$SERVER_JS" ]; then
+    echo "ERROR: server.js not found"
+    echo "Directory contents:"
+    ls -la
+    echo "Searching for .js files:"
+    find . -name "*.js" -type f | head -10
+    exit 1
+  fi
+  echo "Found server.js at: $SERVER_JS"
+  SERVER_DIR=$(dirname "$SERVER_JS")
+  cd "$SERVER_DIR"
+  SERVER_PATH="./server.js"
 fi
 
-echo "Found server.js at: $SERVER_JS"
-SERVER_DIR=$(dirname "$SERVER_JS")
-cd "$SERVER_DIR"
-
 # Start Next.js server
-PORT=3000 HOSTNAME=0.0.0.0 node server.js > /tmp/frontend.log 2>&1 &
+echo "Starting Next.js from: $(pwd)"
+PORT=3000 HOSTNAME=0.0.0.0 node "$SERVER_PATH" > /tmp/frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "Frontend PID: $FRONTEND_PID"
 
@@ -269,7 +272,9 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Start proxy (runs in foreground as main process)
-PORT=${PORT:-8000} node proxy.js
+# Railway provides PORT env var - use it or default to 8000
+echo "Railway PORT env var: ${PORT:-8000}"
+exec node proxy.js
 EOFSH
 
 RUN chmod +x /app/start.sh
