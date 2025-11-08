@@ -24,6 +24,10 @@ COPY scripts/sync-config.js ../scripts/sync-config.js
 # API_URL will be relative since we serve from same origin
 RUN node ../scripts/sync-config.js
 
+# Create public directory if it doesn't exist (Next.js may not create it)
+# Add a placeholder file so the directory is never empty (required for COPY)
+RUN mkdir -p public && touch public/.gitkeep
+
 # Build Next.js app (standalone mode)
 RUN npm run build
 
@@ -105,6 +109,8 @@ COPY --from=backend-setup /app ./
 RUN mkdir -p /app/frontend-standalone
 COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend-standalone
 COPY --from=frontend-builder /app/frontend/.next/static ./frontend-standalone/.next/static
+
+# Copy public directory (now guaranteed to exist with at least .gitkeep)
 COPY --from=frontend-builder /app/frontend/public ./frontend-standalone/public
 
 # Create simple reverse proxy server
