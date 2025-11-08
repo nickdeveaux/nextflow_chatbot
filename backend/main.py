@@ -20,10 +20,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Vector store imports - FAISS is lightweight, always try to import
-# EmbeddingGenerator is only needed when building index (lazy-loaded)
+# EmbeddingGenerator is lazy-loaded only when needed (for queries or building)
 try:
     from vector_store.faiss_store import FAISSVectorStore
     from vector_store.document_loader import prepare_documents_for_indexing
+    from vector_store.index_utils import check_index_exists, ensure_index_directory
     VECTOR_STORE_AVAILABLE = True
 except ImportError as e:
     print(f"Vector store dependencies not available: {e}")
@@ -31,6 +32,8 @@ except ImportError as e:
     VECTOR_STORE_AVAILABLE = False
     FAISSVectorStore = None
     prepare_documents_for_indexing = None
+    check_index_exists = None
+    ensure_index_directory = None
 
 from citations import CitationExtractor
 from llm_client import LLMClient
@@ -39,60 +42,39 @@ import config
 vector_store_instance: Optional[FAISSVectorStore] = None
 citation_extractor: Optional[CitationExtractor] = None
 
-def _check_index_exists():
-    """Check if vector index files exist.
-    
-    Returns:
-        (exists, index_path, data_path) tuple
-    """
-    index_path = config.VECTOR_INDEX_PATH
-    data_path = index_path.replace('.index', '.data')
-    exists = os.path.exists(index_path) and os.path.exists(data_path)
-    return exists, index_path, data_path
-
-
 def _initialize_vector_store():
     """Initialize vector store instance with lazy loading.
     
-    - If index exists: use pre-built embeddings (no torch needed)
-    - If index missing: Requires sentence-transformers to build (only imported when needed)
+    Lazy-loads EmbeddingGenerator only when needed (for queries or building).
+    Uses sentence-transformers for all embeddings (no Google API).
     """
     if not VECTOR_STORE_AVAILABLE:
         return None
     
-    index_exists, index_path, data_path = _check_index_exists()
+    index_exists, index_path, _ = check_index_exists()
     
-    # Lazy import EmbeddingGenerator - only when actually needed
     if index_exists:
         print(f"✓ Index found at {index_path}")
-        print("  Using pre-built query embeddings (no torch/sentence-transformers needed)")
-        try:
-            from vector_store.embeddings import EmbeddingGenerator
-            embedding_gen = EmbeddingGenerator()
-        except ImportError as e:
-            logger.warning(f"Could not initialize pre-built embeddings: {e}")
-            logger.warning("Vector search will be disabled.")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing embedding generator: {e}")
-            return None
     else:
-        # Index missing: Need to build it (requires sentence-transformers)
-        # This import only happens when building index (not in production with pre-built index)
         print(f"✗ Index not found at {index_path}")
-        print("  Building index requires sentence-transformers (heavy dependency)")
-        try:
-            from vector_store.embeddings import EmbeddingGenerator
-            # Use sentence-transformers for building (local, fast, no API calls)
-            embedding_gen = EmbeddingGenerator()
-            print("  Using sentence-transformers for index building")
-        except ImportError as e:
+        print("  Index will be built if NEXTFLOW_DOCS_DIR is available")
+    
+    # Lazy import EmbeddingGenerator - always needed (for queries if index exists, or building if missing)
+    # Only imported when actually needed to avoid loading heavy dependencies if vector store disabled
+    try:
+        from vector_store.embeddings import EmbeddingGenerator
+        embedding_gen = EmbeddingGenerator()
+    except ImportError as e:
+        if index_exists:
+            logger.warning(f"sentence-transformers not available: {e}")
+            logger.warning("Vector search requires sentence-transformers for query embeddings")
+        else:
             logger.error(f"sentence-transformers not available: {e}")
             logger.error("Cannot build index. Install with: pip install -r requirements-build-index.txt")
-            return None
-        except Exception as e:
-            logger.error(f"Error initializing embedding generator: {e}")
-            return None
+        return None
+    except Exception as e:
+        logger.error(f"Error initializing embedding generator: {e}")
+        return None
     
     try:
         return FAISSVectorStore(embedding_gen, index_path=index_path)
@@ -117,13 +99,16 @@ def _load_or_build_index(vector_store: Optional[FAISSVectorStore]):
         return
     
     # Index doesn't exist - try to build it
-    index_path = config.VECTOR_INDEX_PATH
-    print(f"Index not found - attempting to build from documentation...")
+    index_exists, index_path, _ = check_index_exists()
+    if index_exists:
+        # Index exists but wasn't loaded - this shouldn't happen, but handle gracefully
+        print(f"Warning: Index files exist at {index_path} but failed to load")
+        return
     
-    # Ensure data directory exists (for Railway persistent storage)
-    index_dir = os.path.dirname(os.path.abspath(index_path))
-    if index_dir and not os.path.exists(index_dir):
-        os.makedirs(index_dir, exist_ok=True)
+    print("Index not found - attempting to build from documentation...")
+    
+    # Ensure data directory exists
+    ensure_index_directory(index_path)
     
     # Check if docs directory is available
     if not config.NEXTFLOW_DOCS_DIR or not os.path.exists(config.NEXTFLOW_DOCS_DIR):

@@ -60,7 +60,8 @@ RUN if [ "$BUILD_INDEX" = "true" ]; then \
 # Verify final index status
 RUN python check_index.py || echo "Final check completed"
 
-EXPOSE ${PORT:-8000}
+EXPOSE 8000
 
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Start uvicorn on port 8000 (Railway handles port mapping)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 

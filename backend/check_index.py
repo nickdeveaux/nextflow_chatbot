@@ -11,18 +11,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    import config
+    from vector_store.index_utils import check_index_exists
 except ImportError:
-    print("ERROR: Could not import config.py", file=sys.stderr)
-    sys.exit(1)
+    # Fallback if vector_store not available
+    try:
+        import config
+    except ImportError:
+        print("ERROR: Could not import config.py", file=sys.stderr)
+        sys.exit(1)
+    
+    def check_index_exists():
+        index_path = config.VECTOR_INDEX_PATH
+        data_path = index_path.replace('.index', '.data')
+        exists = os.path.exists(index_path) and os.path.exists(data_path)
+        return exists, index_path, data_path
 
 
 def check_index():
     """Check if vector index exists and print status."""
-    index_path = config.VECTOR_INDEX_PATH
-    data_path = index_path.replace('.index', '.data')
-    
-    index_exists = os.path.exists(index_path) and os.path.exists(data_path)
+    index_exists, index_path, data_path = check_index_exists()
     
     print(f"Index path: {index_path}")
     print(f"Data path: {data_path}")
