@@ -130,7 +130,6 @@ Railway supports Docker deployments and is perfect for this full-stack applicati
 
 3. **Set environment variables** in Railway dashboard:
    ```
-   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
    SERVICE_ACCOUNT_PATH=/app/service-account.json
    LLM_MODEL=gemini-2.0-flash-exp
    LLM_MAX_TOKENS=1000

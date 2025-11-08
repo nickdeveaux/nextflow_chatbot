@@ -1,0 +1,13 @@
+# Requirements for building vector index locally
+# Install with: pip install -r requirements-build-index.txt
+# Only needed when creating/rebuilding the vector index
+
+# Include production requirements
+-r requirements.txt
+
+# Local embedding generation for building index (requires torch)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.1+cpu
+sentence-transformers==2.2.2
+transformers==4.35.0
+

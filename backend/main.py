@@ -19,9 +19,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from vector_store.embeddings import EmbeddingGenerator
-from vector_store.faiss_store import FAISSVectorStore
-from vector_store.document_loader import prepare_documents_for_indexing
+# Vector store imports - FAISS is lightweight, always try to import
+# EmbeddingGenerator is only needed when building index (lazy-loaded)
+try:
+    from vector_store.faiss_store import FAISSVectorStore
+    from vector_store.document_loader import prepare_documents_for_indexing
+    VECTOR_STORE_AVAILABLE = True
+except ImportError as e:
+    print(f"Vector store dependencies not available: {e}")
+    print("Running in LLM-only mode (no vector search)")
+    VECTOR_STORE_AVAILABLE = False
+    FAISSVectorStore = None
+    prepare_documents_for_indexing = None
+
 from citations import CitationExtractor
 from llm_client import LLMClient
 import config
@@ -29,60 +39,142 @@ import config
 vector_store_instance: Optional[FAISSVectorStore] = None
 citation_extractor: Optional[CitationExtractor] = None
 
+def _check_index_exists():
+    """Check if vector index files exist.
+    
+    Returns:
+        (exists, index_path, data_path) tuple
+    """
+    index_path = config.VECTOR_INDEX_PATH
+    data_path = index_path.replace('.index', '.data')
+    exists = os.path.exists(index_path) and os.path.exists(data_path)
+    return exists, index_path, data_path
+
+
 def _initialize_vector_store():
-    """Initialize vector store instance."""
-    embedding_gen = EmbeddingGenerator()
-    return FAISSVectorStore(
-        embedding_gen, 
-        index_path=config.VECTOR_INDEX_PATH
-    )
+    """Initialize vector store instance with lazy loading.
+    
+    - If index exists: Uses Google API for embeddings (no torch needed)
+    - If index missing: Requires sentence-transformers to build (only imported when needed)
+    """
+    if not VECTOR_STORE_AVAILABLE:
+        return None
+    
+    index_exists, index_path, data_path = _check_index_exists()
+    
+    # Lazy import EmbeddingGenerator - only when actually needed
+    if index_exists:
+        # Index exists: Use Google API for query embeddings (lightweight, no torch)
+        print(f"✓ Index found at {index_path}")
+        print("  Using Google API for query embeddings (no torch/sentence-transformers needed)")
+        try:
+            from vector_store.embeddings import EmbeddingGenerator
+            embedding_gen = EmbeddingGenerator(use_google_api=True)
+        except ImportError as e:
+            logger.warning(f"Could not initialize Google embeddings: {e}")
+            logger.warning("Vector search will be disabled. Install google-genai if needed.")
+            return None
+        except Exception as e:
+            logger.error(f"Error initializing embedding generator: {e}")
+            return None
+    else:
+        # Index missing: Need to build it (requires sentence-transformers)
+        # This import only happens when building index (not in production with pre-built index)
+        print(f"✗ Index not found at {index_path}")
+        print("  Building index requires sentence-transformers (heavy dependency)")
+        try:
+            from vector_store.embeddings import EmbeddingGenerator
+            # Use sentence-transformers for building (local, fast, no API calls)
+            embedding_gen = EmbeddingGenerator(use_google_api=False)
+            print("  Using sentence-transformers for index building")
+        except ImportError as e:
+            logger.error(f"sentence-transformers not available: {e}")
+            logger.error("Cannot build index. Install with: pip install -r requirements-build-index.txt")
+            return None
+        except Exception as e:
+            logger.error(f"Error initializing embedding generator: {e}")
+            return None
+    
+    try:
+        return FAISSVectorStore(embedding_gen, index_path=index_path)
+    except Exception as e:
+        logger.error(f"Error creating FAISSVectorStore: {e}")
+        return None
 
 
-def _load_or_build_index(vector_store: FAISSVectorStore):
-    """Load existing index or build new one."""
+def _load_or_build_index(vector_store: Optional[FAISSVectorStore]):
+    """Build index if it doesn't exist.
+    
+    Note: If index exists, it's already loaded by FAISSVectorStore.__init__.
+    This function only handles building a new index from documentation.
+    """
+    if not vector_store or not VECTOR_STORE_AVAILABLE:
+        print("Vector store not available - running in LLM-only mode")
+        return
+    
+    # Check if index is already loaded (was found and loaded by FAISSVectorStore.__init__)
+    if vector_store.index is not None and vector_store.index.ntotal > 0:
+        print(f"✓ Vector store ready: {vector_store.index.ntotal} vectors loaded")
+        return
+    
+    # Index doesn't exist - try to build it
+    index_path = config.VECTOR_INDEX_PATH
+    print(f"Index not found - attempting to build from documentation...")
+    
     # Ensure data directory exists (for Railway persistent storage)
-    index_dir = os.path.dirname(os.path.abspath(config.VECTOR_INDEX_PATH))
+    index_dir = os.path.dirname(os.path.abspath(index_path))
     if index_dir and not os.path.exists(index_dir):
         os.makedirs(index_dir, exist_ok=True)
     
-    data_path = config.VECTOR_INDEX_PATH.replace('.index', '.data')
+    # Check if docs directory is available
+    if not config.NEXTFLOW_DOCS_DIR or not os.path.exists(config.NEXTFLOW_DOCS_DIR):
+        print(f"  NEXTFLOW_DOCS_DIR not set or docs not found: {config.NEXTFLOW_DOCS_DIR}")
+        print("  Running in LLM-only mode (no vector search)")
+        print("  To enable vector search:")
+        print("    1. Set NEXTFLOW_DOCS_DIR environment variable")
+        print("    2. Or commit pre-built index files to repository")
+        return
     
-    if os.path.exists(config.VECTOR_INDEX_PATH) and os.path.exists(data_path):
-        print("Loading existing vector store index...")
-        vector_store.load(config.VECTOR_INDEX_PATH)
-        print("Vector store index loaded successfully")
-    elif config.NEXTFLOW_DOCS_DIR and os.path.exists(config.NEXTFLOW_DOCS_DIR):
-        print("Building vector store index from documentation...")
-        texts, metadata = prepare_documents_for_indexing(
-            docs_dir=config.NEXTFLOW_DOCS_DIR
-        )
+    # Build index from documentation
+    print(f"  Loading documents from: {config.NEXTFLOW_DOCS_DIR}")
+    try:
+        texts, metadata = prepare_documents_for_indexing(docs_dir=config.NEXTFLOW_DOCS_DIR)
         if texts:
+            print(f"  Building index from {len(texts)} document chunks...")
             vector_store.build_index(texts, metadata)
-            print(f"Vector store initialized with {len(texts)} chunks")
+            print(f"✓ Vector store built successfully: {len(texts)} chunks indexed")
         else:
-            print("Warning: No documents loaded from docs directory")
-    else:
-        print("Note: NEXTFLOW_DOCS_DIR not set or docs not found. Running in LLM-only mode (no vector search).")
+            print("  Warning: No documents loaded from docs directory")
+            print("  Running in LLM-only mode")
+    except Exception as e:
+        logger.error(f"Error building vector store index: {e}")
+        print("  Failed to build index - running in LLM-only mode")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize vector store on startup."""
+    """Initialize vector store on startup (if available)."""
     global vector_store_instance, citation_extractor
     
-    print("Initializing vector store...")
-    try:
-        vector_store_instance = _initialize_vector_store()
-        _load_or_build_index(vector_store_instance)
-        citation_extractor = CitationExtractor(vector_store_instance)
-        print("Vector store ready!")
-    except Exception as e:
-        print(f"Error initializing vector store: {e}")
+    if VECTOR_STORE_AVAILABLE:
+        print("Initializing vector store...")
+        try:
+            vector_store_instance = _initialize_vector_store()
+            _load_or_build_index(vector_store_instance)
+            citation_extractor = CitationExtractor(vector_store_instance)
+            print("Vector store ready!")
+        except Exception as e:
+            print(f"Error initializing vector store: {e}")
+            print("Falling back to LLM-only mode")
+            vector_store_instance = None
+            citation_extractor = CitationExtractor()
+    else:
+        print("Vector store dependencies not installed - running in LLM-only mode")
         vector_store_instance = None
         citation_extractor = CitationExtractor()
     
     yield
-    print("Shutting down vector store...")
+    print("Shutting down...")
 
 app = FastAPI(title="Nextflow Chat Assistant", lifespan=lifespan)
 

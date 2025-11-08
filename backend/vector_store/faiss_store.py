@@ -157,6 +157,9 @@ class FAISSVectorStore:
         # Load FAISS index
         self.index = faiss.read_index(path)
         
+        # Get actual dimension from loaded index
+        index_dimension = self.index.d if hasattr(self.index, 'd') else self.dimension
+        
         # Load documents and metadata
         data_path = path.replace('.index', '.data')
         if os.path.exists(data_path):
@@ -164,7 +167,14 @@ class FAISSVectorStore:
                 data = pickle.load(f)
                 self.documents = data.get('documents', [])
                 self.metadata = data.get('metadata', [])
-                self.dimension = data.get('dimension', self.dimension)
+                # Use dimension from data file, or from index, or fallback to embedding generator
+                stored_dimension = data.get('dimension', index_dimension)
+                self.dimension = stored_dimension if stored_dimension else self.dimension
+                
+                # Warn if dimension mismatch
+                if self.embedding_generator.dimension != self.dimension:
+                    print(f"WARNING: Index dimension ({self.dimension}) doesn't match embedding generator dimension ({self.embedding_generator.dimension})")
+                    print(f"This may cause search failures. Rebuild index with matching embedding model.")
                 
                 # Ensure metadata matches documents length
                 if len(self.metadata) < len(self.documents):
@@ -175,8 +185,10 @@ class FAISSVectorStore:
             # If data file doesn't exist, initialize empty
             self.documents = []
             self.metadata = []
+            # Use dimension from index
+            self.dimension = index_dimension if index_dimension else self.dimension
         
-        print(f"Index loaded with {self.index.ntotal} vectors")
+        print(f"Index loaded with {self.index.ntotal} vectors (dimension: {self.dimension})")
     
     def add_documents(self, documents: List[str], metadata: Optional[List[dict]] = None):
         """Add new documents to existing index."""

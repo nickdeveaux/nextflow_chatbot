@@ -2,15 +2,23 @@
 Citation extraction and management.
 Extracts citations from vector store search results.
 """
-from typing import List, Optional, Set
-from vector_store.faiss_store import FAISSVectorStore
+from typing import List, Optional, Set, TYPE_CHECKING
 import config
+
+if TYPE_CHECKING:
+    from vector_store.faiss_store import FAISSVectorStore
+
+# Optional import - graceful degradation if vector store not available
+try:
+    from vector_store.faiss_store import FAISSVectorStore
+except ImportError:
+    FAISSVectorStore = None
 
 
 class CitationExtractor:
     """Extracts and manages citations from vector store results."""
     
-    def __init__(self, vector_store: Optional[FAISSVectorStore] = None):
+    def __init__(self, vector_store: Optional['FAISSVectorStore'] = None):
         """Initialize with optional vector store."""
         self.vector_store = vector_store
     
@@ -64,5 +72,5 @@ class CitationExtractor:
     
     def get_default_citations(self) -> List[str]:
         """Get default Nextflow documentation citations."""
-        return config.DEFAULT_CITATIONS
+        return getattr(config, 'DEFAULT_CITATIONS', [])
 
