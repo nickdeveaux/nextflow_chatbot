@@ -1,5 +1,7 @@
 # Nextflow Chat Assistant
 
+**🌐 [Live Demo](https://nextflow-chatbot-git-main-nicholas-de-veauxs-projects.vercel.app?_vercel_share=DTofc9K3c2uHZqB3mInf0dJsfeWEBqcj)**
+
 A chat assistant that answers Nextflow documentation questions using semantic search and LLM responses.
 
 ## Features
@@ -44,7 +46,7 @@ I had a scraper and started scraping the discussions on GitHub and Seqera’s si
 
 I also previously had a check on GPU to see which version of torch to install, but once I was able to fit the CPU-version into Railway, I realized I could make the code simpler by making it always use the most minimal requirements doc (not having to download Nvidia libs). 
 
-Also, since I used Railway and local development, I removed my docker-compose.yml file to have one less thing to maintain. 
+Also, since I used Railway and local development, I removed my docker-compose.yml file to have one less thing to maintain. (Note: The project structure still references it as an optional local development option.) 
 
 ### Compromises:
 
@@ -71,7 +73,8 @@ backend/
 ├── vector_store/              # Vector store implementation
 ├── requirements.txt           # Dependencies
 ├── Dockerfile                 # Backend Dockerfile
-└── test_*.py                  # Unit tests
+├── test_*.py                  # Unit tests
+└── integration_test_chat.py   # Integration test for chat endpoint
 
 frontend/
 ├── app/                       # Next.js app directory
@@ -122,13 +125,30 @@ See [Architecture Documentation](docs/architecture.md) for system architecture a
 
 ## Testing
 
-Run backend tests: 
+### Backend Tests
+
+**Unit tests:**
 ```bash
 cd backend
 pytest test_*.py -v  # Run all tests
 # Or run specific test files:
 pytest test_main.py test_citations.py test_config.py test_vector_store.py test_llm_client.py -v
 ```
+
+**Integration test:**
+```bash
+cd backend
+# Make sure the backend is running on http://localhost:8000
+python integration_test_chat.py
+```
+
+This integration test:
+- Tests the chat endpoint with sample questions
+- Verifies session management (multi-turn conversations)
+- Checks for citations in responses
+- Validates backend health
+
+### Frontend Tests
 
 Run frontend tests: `cd frontend && npm test`
 
