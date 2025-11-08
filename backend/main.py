@@ -54,7 +54,7 @@ def _check_index_exists():
 def _initialize_vector_store():
     """Initialize vector store instance with lazy loading.
     
-    - If index exists: Uses Google API for embeddings (no torch needed)
+    - If index exists: use pre-built embeddings (no torch needed)
     - If index missing: Requires sentence-transformers to build (only imported when needed)
     """
     if not VECTOR_STORE_AVAILABLE:
@@ -64,15 +64,14 @@ def _initialize_vector_store():
     
     # Lazy import EmbeddingGenerator - only when actually needed
     if index_exists:
-        # Index exists: Use Google API for query embeddings (lightweight, no torch)
         print(f"✓ Index found at {index_path}")
-        print("  Using Google API for query embeddings (no torch/sentence-transformers needed)")
+        print("  Using pre-built query embeddings (no torch/sentence-transformers needed)")
         try:
             from vector_store.embeddings import EmbeddingGenerator
-            embedding_gen = EmbeddingGenerator(use_google_api=True)
+            embedding_gen = EmbeddingGenerator()
         except ImportError as e:
-            logger.warning(f"Could not initialize Google embeddings: {e}")
-            logger.warning("Vector search will be disabled. Install google-genai if needed.")
+            logger.warning(f"Could not initialize pre-built embeddings: {e}")
+            logger.warning("Vector search will be disabled.")
             return None
         except Exception as e:
             logger.error(f"Error initializing embedding generator: {e}")
@@ -85,7 +84,7 @@ def _initialize_vector_store():
         try:
             from vector_store.embeddings import EmbeddingGenerator
             # Use sentence-transformers for building (local, fast, no API calls)
-            embedding_gen = EmbeddingGenerator(use_google_api=False)
+            embedding_gen = EmbeddingGenerator()
             print("  Using sentence-transformers for index building")
         except ImportError as e:
             logger.error(f"sentence-transformers not available: {e}")

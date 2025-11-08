@@ -21,18 +21,18 @@ RUN python check_index.py || echo "Index check: No index found (will need requir
 # This includes: FastAPI, uvicorn, google-genai, faiss-cpu, numpy
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
+# Create persistent data directory first (needed for index files)
+RUN mkdir -p /app/data
+
 # Move backend code to app root (for uvicorn) and index files if they exist
 RUN cp backend/main.py backend/llm_client.py backend/citations.py ./ && \
     cp -r backend/vector_store ./vector_store/ && \
     if [ -f backend/vector_index.index ] && [ -f backend/vector_index.data ]; then \
-        cp backend/vector_index.index backend/vector_index.data ./ && \
-        echo "✓ Pre-built index files copied to /app"; \
+        cp backend/vector_index.index backend/vector_index.data /app/data/ && \
+        echo "✓ Pre-built index files copied to /app/data/"; \
     else \
         echo "✗ No pre-built index files found in repo"; \
     fi
-
-# Create persistent data directory
-RUN mkdir -p /app/data
 
 # Conditionally install build requirements only if BUILD_INDEX=true
 # Production with pre-built index: BUILD_INDEX=false (skips torch/sentence-transformers)

@@ -67,22 +67,30 @@ def test_llm_client_custom_params():
 
 
 def test_llm_client_no_service_account_path():
-    """Test error when service account path is not set."""
-    # The code accesses os.environ["GOOGLE_APPLICATION_CREDENTIALS"] directly,
-    # which will raise KeyError if not set. We need to patch it in llm_client module
-    # since that's where os is imported.
+    """Test error when service account path is not set.
+    
+    Note: In practice, config.py sets GOOGLE_APPLICATION_CREDENTIALS at import time,
+    so this test patches the environment variable access in llm_client to simulate
+    the case where it's not set.
+    """
     import llm_client
-    import os
     
-    original_getitem = os.environ.__getitem__
+    # Patch os.environ in llm_client module to raise KeyError when accessing
+    # GOOGLE_APPLICATION_CREDENTIALS
+    original_environ = llm_client.os.environ
     
-    def mock_getitem(key):
-        if key == "GOOGLE_APPLICATION_CREDENTIALS":
-            raise KeyError("GOOGLE_APPLICATION_CREDENTIALS")
-        return original_getitem(key)
+    class MockEnviron:
+        def __getitem__(self, key):
+            if key == "GOOGLE_APPLICATION_CREDENTIALS":
+                raise KeyError("GOOGLE_APPLICATION_CREDENTIALS")
+            return original_environ[key]
+        
+        def get(self, key, default=None):
+            if key == "GOOGLE_APPLICATION_CREDENTIALS":
+                raise KeyError("GOOGLE_APPLICATION_CREDENTIALS")
+            return original_environ.get(key, default)
     
-    # Patch os.environ in llm_client module
-    with patch.object(llm_client.os.environ, '__getitem__', side_effect=mock_getitem):
+    with patch.object(llm_client.os, 'environ', MockEnviron()):
         with pytest.raises(KeyError, match="GOOGLE_APPLICATION_CREDENTIALS"):
             LLMClient()
 

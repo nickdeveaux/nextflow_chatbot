@@ -21,4 +21,4 @@ google-genai==1.37.0
 # Vector store - FAISS works with numpy arrays directly
 # No torch needed - embeddings come from Google's API
 faiss-cpu==1.12.0
-numpy>=1.25.0,<3.0
+numpy>=1.25.0,<2.0
