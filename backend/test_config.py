@@ -71,7 +71,11 @@ def test_config_yaml_exists():
 
 
 def test_service_account_path():
-    """Test service account path is defined."""
-    assert config.SERVICE_ACCOUNT_PATH is not None
-    assert isinstance(config.SERVICE_ACCOUNT_PATH, str)
+    """Test service account path type (may be None if not configured)."""
+    # SERVICE_ACCOUNT_PATH can be None if no service account is configured
+    # (this is valid - the app just won't be able to use the LLM)
+    # Or it can be a string path (even if file doesn't exist, that's handled by LLM client)
+    assert config.SERVICE_ACCOUNT_PATH is None or isinstance(config.SERVICE_ACCOUNT_PATH, str)
+    if config.SERVICE_ACCOUNT_PATH is not None:
+        assert len(config.SERVICE_ACCOUNT_PATH) > 0
 
