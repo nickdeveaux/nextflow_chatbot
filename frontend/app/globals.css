@@ -293,13 +293,10 @@ body {
   max-height: 44px;
   height: 44px;
   white-space: nowrap;
-  flex-shrink: 0;
-  flex-grow: 0;
-  flex-basis: auto;
+  flex: 0 0 auto;
   box-sizing: border-box;
   /* Prevent button from taking more space than needed on iOS */
-  -webkit-flex-shrink: 0;
-  -webkit-flex-grow: 0;
+  -webkit-flex: 0 0 auto;
 }
 
 .send-button:hover:not(:disabled) {
@@ -579,6 +576,7 @@ body {
   
   .chat-input {
     /* Prevent iOS from expanding input beyond container */
+    appearance: none;
     -webkit-appearance: none;
     -webkit-flex: 1 1 0%;
     flex: 1 1 0%;
@@ -586,6 +584,7 @@ body {
   
   .send-button {
     /* Ensure button stays fixed size on iOS and doesn't shrink */
+    appearance: none;
     -webkit-appearance: none;
     -webkit-flex: 0 0 auto;
     flex: 0 0 auto;
@@ -614,7 +613,6 @@ body {
   .header h1 {
     font-size: 1.1rem;
   }
-}
 
   .theme-toggle {
     min-width: 36px;
