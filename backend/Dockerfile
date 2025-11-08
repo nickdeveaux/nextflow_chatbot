@@ -58,16 +58,22 @@ RUN cp backend/main.py \
         echo "✗ No pre-built index files found in repo"; \
     fi
 
-# Optional: Clone Nextflow docs for building index (if not using pre-built index)
+# Clone Nextflow docs for building index (only if BUILD_INDEX is true)
+# This allows the index to be built at runtime if needed
 ARG NEXTFLOW_BRANCH=master
-ARG BUILD_INDEX=false
+ARG BUILD_INDEX=true
 RUN if [ "$BUILD_INDEX" = "true" ]; then \
-    echo "Building index - Cloning Nextflow docs..."; \
+    echo "Cloning Nextflow docs for index building..."; \
     git clone --depth 1 --branch ${NEXTFLOW_BRANCH} https://github.com/nextflow-io/nextflow.git /tmp/nextflow && \
     mv /tmp/nextflow/docs /app/nextflow-docs && \
     rm -rf /tmp/nextflow && \
-    echo "✓ Nextflow docs ready for index building"; \
+    echo "✓ Nextflow docs cloned to /app/nextflow-docs"; \
+    else \
+    echo "Skipping Nextflow docs clone (BUILD_INDEX=false)"; \
     fi
+
+# Set NEXTFLOW_DOCS_DIR if docs were cloned
+ENV NEXTFLOW_DOCS_DIR=/app/nextflow-docs
 
 # Verify final index status
 RUN python check_index.py || echo "Final check completed"

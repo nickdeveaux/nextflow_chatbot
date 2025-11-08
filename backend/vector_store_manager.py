@@ -3,11 +3,7 @@ Vector store initialization and management.
 """
 import os
 import logging
-import subprocess
-import shutil
-import tempfile
 from typing import Optional
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -27,82 +23,6 @@ except ImportError as e:
     ensure_index_directory = None
 
 import config
-
-
-def clone_nextflow_docs(target_dir: str = None, branch: str = "master") -> Optional[str]:
-    """Clone Nextflow documentation from GitHub.
-    
-    Args:
-        target_dir: Directory to clone docs into. If None, uses /app/nextflow-docs or temp directory.
-        branch: Git branch to clone (default: master)
-    
-    Returns:
-        Path to docs directory if successful, None otherwise
-    """
-    if target_dir is None:
-        # Try /app/nextflow-docs first (for Railway/Docker)
-        if os.path.exists("/app"):
-            target_dir = "/app/nextflow-docs"
-        else:
-            # Use temp directory for local dev
-            target_dir = os.path.join(tempfile.gettempdir(), "nextflow-docs")
-    
-    # Check if docs already exist
-    if os.path.exists(target_dir) and os.path.isdir(target_dir):
-        # Check if it looks like Nextflow docs (has .md files)
-        md_files = list(Path(target_dir).rglob("*.md"))
-        if md_files:
-            logger.info(f"Nextflow docs already exist at {target_dir}")
-            return target_dir
-    
-    logger.info(f"Cloning Nextflow documentation from GitHub (branch: {branch})...")
-    
-    try:
-        # Create parent directory if it doesn't exist
-        parent_dir = os.path.dirname(os.path.abspath(target_dir))
-        os.makedirs(parent_dir, exist_ok=True)
-        
-        # Remove target directory if it exists but is empty/invalid
-        if os.path.exists(target_dir):
-            shutil.rmtree(target_dir)
-        
-        # Clone the repository
-        repo_url = "https://github.com/nextflow-io/nextflow.git"
-        temp_clone = os.path.join(tempfile.gettempdir(), f"nextflow-clone-{os.getpid()}")
-        
-        try:
-            logger.info(f"Cloning {repo_url} (branch: {branch}) to temporary location...")
-            subprocess.run(
-                ["git", "clone", "--depth", "1", "--branch", branch, repo_url, temp_clone],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
-            
-            # Move docs directory to target
-            source_docs = os.path.join(temp_clone, "docs")
-            if os.path.exists(source_docs):
-                shutil.move(source_docs, target_dir)
-                logger.info(f"✓ Nextflow docs cloned successfully to {target_dir}")
-                return target_dir
-            else:
-                logger.warning(f"Docs directory not found in cloned repository at {source_docs}")
-                return None
-        finally:
-            # Clean up temp clone directory
-            if os.path.exists(temp_clone):
-                shutil.rmtree(temp_clone, ignore_errors=True)
-                
-    except subprocess.TimeoutExpired:
-        logger.error("Timeout cloning Nextflow docs (exceeded 5 minutes)")
-        return None
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error cloning Nextflow docs: {e.stderr if e.stderr else str(e)}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error cloning Nextflow docs: {e}", exc_info=True)
-        return None
 
 
 def initialize_vector_store():
@@ -188,19 +108,24 @@ def load_or_build_index(vector_store: Optional[FAISSVectorStore]):
     # Ensure data directory exists
     ensure_index_directory(index_path)
     
-    # Determine docs directory - use config if set, otherwise clone from GitHub
+    # Use docs directory from config (should be set by Dockerfile to /app/nextflow-docs)
     docs_dir = config.NEXTFLOW_DOCS_DIR
     
-    # If docs_dir is not set or doesn't exist, clone from GitHub
-    if not docs_dir or not os.path.exists(docs_dir):
-        logger.info("NEXTFLOW_DOCS_DIR not set or docs not found - cloning from GitHub...")
-        cloned_docs_dir = clone_nextflow_docs()
-        if cloned_docs_dir:
-            docs_dir = cloned_docs_dir
-            logger.info(f"Using cloned docs from {docs_dir}")
+    # If docs_dir is not set, try default location
+    if not docs_dir:
+        # Default location where Dockerfile clones docs
+        if os.path.exists("/app/nextflow-docs"):
+            docs_dir = "/app/nextflow-docs"
         else:
-            logger.error("Failed to clone Nextflow docs from GitHub")
+            logger.error("NEXTFLOW_DOCS_DIR not set and /app/nextflow-docs not found")
+            logger.error("Dockerfile should clone Nextflow docs during build")
             return
+    
+    # Check if docs directory exists
+    if not os.path.exists(docs_dir):
+        logger.error(f"Docs directory not found: {docs_dir}")
+        logger.error("Ensure Dockerfile clones Nextflow docs or set NEXTFLOW_DOCS_DIR")
+        return
     
     # Build index from documentation
     logger.info(f"Loading documents from: {docs_dir}")

@@ -1,9 +1,8 @@
 {
-  "buildCommand": "cd frontend && npm install 2>&1 | grep -v 'npm warn deprecated' || true && npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/.next",
   "framework": "nextjs",
-  "rootDirectory": "frontend",
-  "installCommand": "cd frontend && npm install 2>&1 | grep -v 'npm warn deprecated' || true",
+  "installCommand": "cd frontend && npm install",
   "devCommand": "cd frontend && npm run dev"
 }
 
