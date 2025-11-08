@@ -153,9 +153,20 @@ async def lifespan(app: FastAPI):
         print("Initializing vector store...")
         try:
             vector_store_instance = _initialize_vector_store()
-            _load_or_build_index(vector_store_instance)
-            citation_extractor = CitationExtractor(vector_store_instance)
-            print("Vector store ready!")
+            if vector_store_instance:
+                _load_or_build_index(vector_store_instance)
+                # Verify vector store is actually ready (has loaded index)
+                if vector_store_instance and vector_store_instance.index and vector_store_instance.index.ntotal > 0:
+                    citation_extractor = CitationExtractor(vector_store_instance)
+                    print("Vector store ready!")
+                else:
+                    print("Vector store initialized but index not loaded - running in LLM-only mode")
+                    vector_store_instance = None
+                    citation_extractor = CitationExtractor()
+            else:
+                print("Vector store initialization failed - running in LLM-only mode")
+                vector_store_instance = None
+                citation_extractor = CitationExtractor()
         except Exception as e:
             print(f"Error initializing vector store: {e}")
             print("Falling back to LLM-only mode")

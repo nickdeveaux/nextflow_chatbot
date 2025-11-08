@@ -1,6 +1,6 @@
 # Production requirements - minimal runtime dependencies
 # For Railway deployment: No torch, no sentence-transformers
-# Vector store uses Google's embedding API for queries
+# Note: Vector store requires sentence-transformers for embeddings (install via requirements-build-index.txt)
 
 # Testing
 pytest==7.4.3
@@ -19,6 +19,6 @@ pyyaml==6.0.1
 google-genai==1.37.0
 
 # Vector store - FAISS works with numpy arrays directly
-# No torch needed - embeddings come from Google's API
+# Note: sentence-transformers required for embeddings (in requirements-build-index.txt)
 faiss-cpu==1.12.0
 numpy>=1.25.0,<2.0

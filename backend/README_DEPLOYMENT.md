@@ -75,8 +75,8 @@ Output:
 The code uses **lazy imports** to avoid loading heavy dependencies:
 
 1. **If index exists** (production):
-   - Uses Google API for query embeddings
-   - No torch/sentence-transformers needed
+   - Requires sentence-transformers for query embeddings
+   - Install via requirements-build-index.txt if vector search is needed
    - EmbeddingGenerator only imported when needed
    - Fast startup, minimal memory
 
