@@ -16,9 +16,11 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 # Set this environment variable to prevent instruction set detection logs
 os.environ.setdefault("FAISS_OPT_LEVEL", "")
 
-# Setup logging (do this early, before importing modules that use logging)
+# Setup logging - use INFO level for Railway (DEBUG shows as errors)
+# Railway-friendly logging: only show INFO and above
+log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=getattr(logging, log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -27,6 +29,17 @@ logger = logging.getLogger(__name__)
 # Set these BEFORE importing the modules that use them
 logging.getLogger('faiss.loader').setLevel(logging.WARNING)
 logging.getLogger('pydantic._internal._fields').setLevel(logging.ERROR)
+logging.getLogger('transformers').setLevel(logging.WARNING)
+logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
+logging.getLogger('google.genai').setLevel(logging.WARNING)
+logging.getLogger('google_genai').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('google.auth').setLevel(logging.WARNING)
+logging.getLogger('google.auth.transport').setLevel(logging.WARNING)
+logging.getLogger('google.oauth2').setLevel(logging.WARNING)
+logging.getLogger('filelock').setLevel(logging.WARNING)
 
 # Vector store imports - FAISS is lightweight, always try to import
 # EmbeddingGenerator is lazy-loaded only when needed (for queries or building)
@@ -36,8 +49,11 @@ try:
     from vector_store.index_utils import check_index_exists, ensure_index_directory
     VECTOR_STORE_AVAILABLE = True
 except ImportError as e:
-    print(f"Vector store dependencies not available: {e}")
-    print("Running in LLM-only mode (no vector search)")
+    # Logger not yet defined, use print for import-time errors (will be rare)
+    # This happens at module import time, before logging is configured
+    import sys
+    print(f"INFO: Vector store dependencies not available: {e}", file=sys.stdout)
+    print("INFO: Running in LLM-only mode (no vector search)", file=sys.stdout)
     VECTOR_STORE_AVAILABLE = False
     FAISSVectorStore = None
     prepare_documents_for_indexing = None
@@ -58,23 +74,26 @@ def _initialize_vector_store():
     Uses sentence-transformers for all embeddings (no Google API).
     """
     if not VECTOR_STORE_AVAILABLE:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Vector store dependencies not available - running in LLM-only mode")
         return None
     
     index_exists, index_path, _ = check_index_exists()
     
     if index_exists:
-        print(f"✓ Index found at {index_path}")
+        logger.info(f"Index found at {index_path}")
     else:
-        print(f"✗ Index not found at {index_path}")
-        print("  Index will be built if NEXTFLOW_DOCS_DIR is available")
+        logger.info(f"Index not found at {index_path}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("  Index will be built if NEXTFLOW_DOCS_DIR is available")
     
     # Lazy import EmbeddingGenerator - always needed (for queries if index exists, or building if missing)
     # Only imported when actually needed to avoid loading heavy dependencies if vector store disabled
     try:
         from vector_store.embeddings import EmbeddingGenerator
-        print("Creating EmbeddingGenerator...")
         embedding_gen = EmbeddingGenerator()
-        print("✓ EmbeddingGenerator created successfully")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("EmbeddingGenerator created successfully")
     except ImportError as e:
         error_msg = f"sentence-transformers not available: {e}"
         if index_exists:
@@ -83,38 +102,31 @@ def _initialize_vector_store():
         else:
             logger.error(error_msg)
             logger.error("Cannot build index. Ensure sentence-transformers is installed (included in requirements.txt)")
-        print(f"ERROR: {error_msg}")
         return None
     except Exception as e:
         error_msg = f"Error initializing embedding generator: {e}"
-        logger.error(error_msg)
-        print(f"ERROR: {error_msg}")
-        import traceback
-        traceback.print_exc()
+        logger.error(error_msg, exc_info=True)
         return None
     
     try:
-        print(f"Creating FAISSVectorStore with index_path: {index_path}")
         vector_store = FAISSVectorStore(embedding_gen, index_path=index_path)
         index_loaded = vector_store.index is not None and vector_store.index.ntotal > 0 if vector_store.index else False
-        print(f"✓ FAISSVectorStore created (index loaded: {index_loaded})")
         
         # Pre-warm embedding model with a dummy query to avoid first-query delay
         if index_loaded:
-            print("Pre-warming embedding model...")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Pre-warming embedding model...")
             try:
                 embedding_gen.embed("warmup")
-                print("✓ Embedding model warmed up")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Embedding model warmed up")
             except Exception as e:
-                print(f"Warning: Failed to warm up model: {e}")
+                logger.warning(f"Failed to warm up model: {e}")
         
         return vector_store
     except Exception as e:
         error_msg = f"Error creating FAISSVectorStore: {e}"
-        logger.error(error_msg)
-        print(f"ERROR: {error_msg}")
-        import traceback
-        traceback.print_exc()
+        logger.error(error_msg, exc_info=True)
         return None
 
 
@@ -125,49 +137,49 @@ def _load_or_build_index(vector_store: Optional[FAISSVectorStore]):
     This function only handles building a new index from documentation.
     """
     if not vector_store or not VECTOR_STORE_AVAILABLE:
-        print("Vector store not available - running in LLM-only mode")
+        logger.info("Vector store not available - running in LLM-only mode")
         return
     
     # Check if index is already loaded (was found and loaded by FAISSVectorStore.__init__)
     if vector_store.index is not None and vector_store.index.ntotal > 0:
-        print(f"✓ Vector store ready: {vector_store.index.ntotal} vectors loaded")
+        logger.info(f"Vector store ready: {vector_store.index.ntotal} vectors loaded")
         return
     
     # Index doesn't exist - try to build it
     index_exists, index_path, _ = check_index_exists()
     if index_exists:
         # Index exists but wasn't loaded - this shouldn't happen, but handle gracefully
-        print(f"Warning: Index files exist at {index_path} but failed to load")
+        logger.warning(f"Index files exist at {index_path} but failed to load")
         return
     
-    print("Index not found - attempting to build from documentation...")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Index not found - attempting to build from documentation...")
     
     # Ensure data directory exists
     ensure_index_directory(index_path)
     
     # Check if docs directory is available
     if not config.NEXTFLOW_DOCS_DIR or not os.path.exists(config.NEXTFLOW_DOCS_DIR):
-        print(f"  NEXTFLOW_DOCS_DIR not set or docs not found: {config.NEXTFLOW_DOCS_DIR}")
-        print("  Running in LLM-only mode (no vector search)")
-        print("  To enable vector search:")
-        print("    1. Set NEXTFLOW_DOCS_DIR environment variable")
-        print("    2. Or commit pre-built index files to repository")
+        logger.info("NEXTFLOW_DOCS_DIR not set or docs not found - running in LLM-only mode")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"  NEXTFLOW_DOCS_DIR: {config.NEXTFLOW_DOCS_DIR}")
+            logger.debug("  To enable vector search: Set NEXTFLOW_DOCS_DIR or commit pre-built index files")
         return
     
     # Build index from documentation
-    print(f"  Loading documents from: {config.NEXTFLOW_DOCS_DIR}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Loading documents from: {config.NEXTFLOW_DOCS_DIR}")
     try:
         texts, metadata = prepare_documents_for_indexing(docs_dir=config.NEXTFLOW_DOCS_DIR)
         if texts:
-            print(f"  Building index from {len(texts)} document chunks...")
+            logger.info(f"Building index from {len(texts)} document chunks...")
             vector_store.build_index(texts, metadata)
-            print(f"✓ Vector store built successfully: {len(texts)} chunks indexed")
+            logger.info(f"Vector store built successfully: {len(texts)} chunks indexed")
         else:
-            print("  Warning: No documents loaded from docs directory")
-            print("  Running in LLM-only mode")
+            logger.warning("No documents loaded from docs directory - running in LLM-only mode")
     except Exception as e:
-        logger.error(f"Error building vector store index: {e}")
-        print("  Failed to build index - running in LLM-only mode")
+        logger.error(f"Error building vector store index: {e}", exc_info=True)
+        logger.info("Failed to build index - running in LLM-only mode")
 
 
 @asynccontextmanager
@@ -176,7 +188,7 @@ async def lifespan(app: FastAPI):
     global vector_store_instance, citation_extractor
     
     if VECTOR_STORE_AVAILABLE:
-        print("Initializing vector store...")
+        logger.info("Initializing vector store...")
         try:
             vector_store_instance = _initialize_vector_store()
             if vector_store_instance:
@@ -184,27 +196,27 @@ async def lifespan(app: FastAPI):
                 # Verify vector store is actually ready (has loaded index)
                 if vector_store_instance and vector_store_instance.index and vector_store_instance.index.ntotal > 0:
                     citation_extractor = CitationExtractor(vector_store_instance)
-                    print("Vector store ready!")
+                    logger.info("Vector store ready!")
                 else:
-                    print("Vector store initialized but index not loaded - running in LLM-only mode")
+                    logger.info("Vector store initialized but index not loaded - running in LLM-only mode")
                     vector_store_instance = None
                     citation_extractor = CitationExtractor()
             else:
-                print("Vector store initialization failed - running in LLM-only mode")
+                logger.info("Vector store initialization failed - running in LLM-only mode")
                 vector_store_instance = None
                 citation_extractor = CitationExtractor()
         except Exception as e:
-            print(f"Error initializing vector store: {e}")
-            print("Falling back to LLM-only mode")
+            logger.error(f"Error initializing vector store: {e}", exc_info=True)
+            logger.info("Falling back to LLM-only mode")
             vector_store_instance = None
             citation_extractor = CitationExtractor()
     else:
-        print("Vector store dependencies not installed - running in LLM-only mode")
+        logger.info("Vector store dependencies not installed - running in LLM-only mode")
         vector_store_instance = None
         citation_extractor = CitationExtractor()
     
     yield
-    print("Shutting down...")
+    logger.info("Shutting down...")
 
 app = FastAPI(title="Nextflow Chat Assistant", lifespan=lifespan)
 
@@ -260,28 +272,37 @@ def get_knowledge_context(query: str) -> str:
     global vector_store_instance
     
     if not vector_store_instance:
-        logger.debug("Vector store not initialized, returning empty context")
+        # Silent failure - vector store unavailable is expected in some deployments
         return ""
     
     try:
+        import time
+        start_time = time.time()
+        
         results = vector_store_instance.search(
             query, 
             top_k=config.VECTOR_SEARCH_TOP_K,
             threshold=config.VECTOR_SEARCH_THRESHOLD
         )
         
-        # Log retrieved documents
-        logger.debug(f"Vector search for query: '{query[:100]}...'")
-        logger.debug(f"Found {len(results)} results (top_k={config.VECTOR_SEARCH_TOP_K}, threshold={config.VECTOR_SEARCH_THRESHOLD})")
-        for i, result in enumerate(results):
-            if isinstance(result, tuple) and len(result) >= 3:
-                text, similarity, metadata = result[:3]
-                text_preview = text[:150] + "..." if len(text) > 150 else text
-                url = metadata.get('url', 'N/A') if isinstance(metadata, dict) else 'N/A'
-                logger.debug(f"  [{i+1}] Similarity: {similarity:.3f}, URL: {url}")
-                logger.debug(f"      Text: {text_preview}")
-            else:
-                logger.debug(f"  [{i+1}] Result: {result}")
+        search_time = time.time() - start_time
+        
+        # Log summary only (detailed logs only in DEBUG mode)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Vector search for query: '{query[:100]}...' ({search_time:.3f}s)")
+            logger.debug(f"Found {len(results)} results (top_k={config.VECTOR_SEARCH_TOP_K}, threshold={config.VECTOR_SEARCH_THRESHOLD})")
+            for i, result in enumerate(results):
+                if isinstance(result, tuple) and len(result) >= 3:
+                    text, similarity, metadata = result[:3]
+                    text_preview = text[:150] + "..." if len(text) > 150 else text
+                    url = metadata.get('url', 'N/A') if isinstance(metadata, dict) else 'N/A'
+                    logger.debug(f"  [{i+1}] Similarity: {similarity:.3f}, URL: {url}")
+                    logger.debug(f"      Text: {text_preview}")
+                else:
+                    logger.debug(f"  [{i+1}] Result: {result}")
+        elif results:
+            # Brief summary for INFO level
+            logger.info(f"Vector search: {len(results)} results found ({search_time:.3f}s)")
         
         return _format_context(results) if results else ""
     except Exception as e:
@@ -331,9 +352,8 @@ async def call_gemini_direct(
             lambda: client.complete(messages, system_prompt)
         )
     except Exception as e:
-        import traceback
-        print(f"Error calling Gemini: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
+        # Only log the error message, not full stack trace (less verbose)
+        logger.error(f"Error calling Gemini: {e}")
         raise
 
 async def get_llm_response(
@@ -345,10 +365,12 @@ async def get_llm_response(
     try:
         return await call_gemini_direct(query, conversation_history, context)
     except Exception as e:
-        print(f"Error in get_llm_response: {e}")
+        # Try fallback without context
         try:
             return await call_gemini_direct(query, conversation_history, "")
         except Exception as e2:
+            # Only log final failure
+            logger.error(f"LLM service unavailable: {e2}")
             raise HTTPException(
                 status_code=500, 
                 detail=f"LLM service unavailable: {str(e2)}"
@@ -450,7 +472,9 @@ async def chat(message: ChatMessage):
         if _check_prompt_injection(message.message):
             # Log but don't block - let the LLM handle it with its system prompt
             # This is a lightweight guardrail that just raises awareness
-            logger.info("Prompt injection pattern detected, but allowing through (LLM system prompt should handle)")
+            # Log at debug level only - not an error, just informational
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Prompt injection pattern detected, but allowing through (LLM system prompt should handle)")
         
         session_id = _get_or_create_session(message.session_id)
         
@@ -485,8 +509,7 @@ async def chat(message: ChatMessage):
         raise
     except Exception as e:
         import traceback
-        print(f"Error processing chat: {e}")
-        print(traceback.format_exc())
+        logger.error(f"Error processing chat: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, 
             detail=f"Error processing chat: {str(e)}"
