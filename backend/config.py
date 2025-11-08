@@ -9,7 +9,26 @@ from typing import List
 import tempfile
 
 # Load YAML config
-_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+# Try multiple possible locations (check container path first for Railway):
+# 1. Absolute path in container: /app/config.yaml
+# 2. Same directory as config.py (for container: /app/config.yaml)
+# 3. Parent directory (for local: backend/../config.yaml)
+_CONFIG_PATH = None
+possible_paths = [
+    Path("/app/config.yaml"),  # Absolute path in container (Railway)
+    Path(__file__).parent / "config.yaml",  # Same directory as config.py
+    Path(__file__).parent.parent / "config.yaml",  # Parent directory (local dev)
+]
+for path in possible_paths:
+    if path.exists():
+        _CONFIG_PATH = path
+        break
+
+if _CONFIG_PATH is None:
+    raise FileNotFoundError(
+        f"config.yaml not found. Tried: {', '.join(str(p) for p in possible_paths)}"
+    )
+
 with open(_CONFIG_PATH, 'r') as f:
     _config = yaml.safe_load(f)
 
