@@ -253,15 +253,17 @@ export default function Home() {
             <div className="modal-icon">😢</div>
             <h2>Backend Unavailable</h2>
             <p>The backend service is currently unavailable. Please try again later.</p>
-            <p className="modal-subtext">The chat history can be downloaded for this session.</p>
             {messages.length > 0 && (
-              <button
-                className="modal-download-button"
-                onClick={downloadChatHistory}
-                aria-label="Download chat history"
-              >
-                📥 Download Chat History
-              </button>
+              <>
+                <p className="modal-subtext">The chat history can be downloaded for this session.</p>
+                <button
+                  className="modal-download-button"
+                  onClick={downloadChatHistory}
+                  aria-label="Download chat history"
+                >
+                  📥 Download Chat History
+                </button>
+              </>
             )}
           </div>
         </div>
