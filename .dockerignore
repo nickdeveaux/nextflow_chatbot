@@ -42,7 +42,6 @@ __tests__/
 
 # Config (will be copied explicitly)
 # config.yaml
-# nextflow_README.md
 
 # Vector store (will be built in container)
 vector_index.*

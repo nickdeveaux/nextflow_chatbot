@@ -2,26 +2,36 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for sentence-transformers
+# Install system dependencies for sentence-transformers and git
 RUN apt-get update && apt-get install -y \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY main.py config.py llm_client.py citations.py ./
-COPY vector_store/ ./vector_store/
+# Clone Nextflow docs (shallow)
+ARG NEXTFLOW_BRANCH=master
+RUN git clone --depth 1 --branch ${NEXTFLOW_BRANCH} https://github.com/nextflow-io/nextflow.git /tmp/nextflow \
+    && mv /tmp/nextflow/docs /app/nextflow-docs \
+    && rm -rf /tmp/nextflow \
+    && echo "Nextflow docs cloned from ${NEXTFLOW_BRANCH} branch"
 
-# Copy config files (assumes build context is project root)
-COPY config.yaml nextflow_README.md ./
+# Copy backend code
+COPY backend/main.py backend/config.py backend/llm_client.py backend/citations.py ./
+COPY backend/vector_store/ ./vector_store/
 
-# Expose port (Railway will set PORT env var)
+# Copy shared config
+COPY config.yaml ./
+
+# Create persistent data directory
+RUN mkdir -p /app/data
+
+ENV NEXTFLOW_DOCS_DIR=/app/nextflow-docs
+
 EXPOSE ${PORT:-8000}
 
-# Use PORT environment variable for Railway compatibility
-# Railway sets PORT automatically, default to 8000 if not set
 CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
 

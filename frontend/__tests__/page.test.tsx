@@ -17,11 +17,12 @@ jest.mock('../config', () => ({
 
 describe('Nextflow Chat Assistant', () => {
   beforeEach(() => {
-    (fetch as jest.Mock).mockClear()
+    jest.clearAllMocks()
+    ;(fetch as jest.Mock).mockClear()
     Storage.prototype.getItem = jest.fn(() => null)
     Storage.prototype.setItem = jest.fn()
     
-    // Mock health check endpoint to return success by default
+    // Mock health check endpoint to return success by default (resolve immediately)
     ;(fetch as jest.Mock).mockImplementation((url: string) => {
       if (url.includes('/health')) {
         return Promise.resolve({
@@ -33,36 +34,73 @@ describe('Nextflow Chat Assistant', () => {
     })
   })
 
-  it('renders the header', () => {
+  it('renders the header', async () => {
     render(<Home />)
+    // Wait for health check to complete
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     expect(screen.getByText('Nextflow Chat Assistant')).toBeInTheDocument()
   })
 
-  it('renders the welcome message when no messages', () => {
+  it('renders the welcome message when no messages', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     expect(screen.getByText(/Welcome to Nextflow Chat Assistant/i)).toBeInTheDocument()
   })
 
-  it('renders the chat input', () => {
+  it('renders the chat input', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const input = screen.getByPlaceholderText('Type your message...')
     expect(input).toBeInTheDocument()
   })
 
-  it('renders the send button', () => {
+  it('renders the send button', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const sendButton = screen.getByText('Send')
     expect(sendButton).toBeInTheDocument()
   })
 
-  it('disables send button when input is empty', () => {
+  it('disables send button when input is empty', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const sendButton = screen.getByText('Send')
     expect(sendButton).toBeDisabled()
   })
 
-  it('enables send button when input has text', () => {
+  it('enables send button when input has text', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
     
@@ -94,6 +132,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 
@@ -138,6 +184,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 
@@ -173,6 +227,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 
@@ -199,6 +261,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 
@@ -213,14 +283,26 @@ describe('Nextflow Chat Assistant', () => {
     })
   })
 
-  it('renders theme toggle button', () => {
+  it('renders theme toggle button', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const themeToggle = screen.getByLabelText('Toggle dark mode')
     expect(themeToggle).toBeInTheDocument()
   })
 
-  it('toggles dark mode when theme button is clicked', () => {
+  it('toggles dark mode when theme button is clicked', async () => {
     render(<Home />)
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
     const themeToggle = screen.getByLabelText('Toggle dark mode')
     
     fireEvent.click(themeToggle)
@@ -254,6 +336,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 
@@ -290,6 +380,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...') as HTMLTextAreaElement
 
     fireEvent.change(input, { target: { value: 'Test' } })
@@ -305,8 +403,16 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 3000 })
   })
 
-  it('does not send on Shift+Enter', () => {
+  it('does not send on Shift+Enter', async () => {
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
 
     // Clear health check calls
@@ -437,6 +543,14 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     render(<Home />)
+    // Wait for health check
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/health'),
+        expect.any(Object)
+      )
+    }, { timeout: 1000 })
+    
     const input = screen.getByPlaceholderText('Type your message...')
     const sendButton = screen.getByText('Send')
 

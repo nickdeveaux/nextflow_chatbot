@@ -68,17 +68,6 @@ def test_extract_from_query_store_error():
     assert result == []
 
 
-def test_get_default_citations():
-    """Test default citations."""
-    extractor = CitationExtractor()
-    defaults = extractor.get_default_citations()
-    
-    assert len(defaults) == 3
-    assert "https://www.nextflow.io/docs/latest/" in defaults
-    assert "https://www.nextflow.io/docs/latest/dsl2.html" in defaults
-    assert "https://github.com/nextflow-io/nextflow" in defaults
-
-
 def test_extract_urls_deduplication():
     """Test URL deduplication."""
     extractor = CitationExtractor()

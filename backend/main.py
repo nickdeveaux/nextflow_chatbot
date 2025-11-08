@@ -40,12 +40,18 @@ def _initialize_vector_store():
 
 def _load_or_build_index(vector_store: FAISSVectorStore):
     """Load existing index or build new one."""
+    # Ensure data directory exists (for Railway persistent storage)
+    index_dir = os.path.dirname(os.path.abspath(config.VECTOR_INDEX_PATH))
+    if index_dir and not os.path.exists(index_dir):
+        os.makedirs(index_dir, exist_ok=True)
+    
     data_path = config.VECTOR_INDEX_PATH.replace('.index', '.data')
     
     if os.path.exists(config.VECTOR_INDEX_PATH) and os.path.exists(data_path):
         print("Loading existing vector store index...")
         vector_store.load(config.VECTOR_INDEX_PATH)
-    else:
+        print("Vector store index loaded successfully")
+    elif config.NEXTFLOW_DOCS_DIR and os.path.exists(config.NEXTFLOW_DOCS_DIR):
         print("Building vector store index from documentation...")
         texts, metadata = prepare_documents_for_indexing(
             docs_dir=config.NEXTFLOW_DOCS_DIR
@@ -54,7 +60,9 @@ def _load_or_build_index(vector_store: FAISSVectorStore):
             vector_store.build_index(texts, metadata)
             print(f"Vector store initialized with {len(texts)} chunks")
         else:
-            print("Warning: No documents loaded.")
+            print("Warning: No documents loaded from docs directory")
+    else:
+        print("Note: NEXTFLOW_DOCS_DIR not set or docs not found. Running in LLM-only mode (no vector search).")
 
 
 @asynccontextmanager
@@ -159,21 +167,13 @@ def get_knowledge_context(query: str) -> str:
         return ""
 
 def _get_system_prompt() -> str:
-    """Get Nextflow-specific system prompt with README attached."""
+    """Get Nextflow-specific system prompt"""
     base_prompt = config.SYSTEM_PROMPT
     
     # Add max_output_tokens information to prompt
     max_tokens_info = f"\n\nIMPORTANT: Keep responses concise. You have a maximum output limit of {config.LLM_MAX_TOKENS} tokens. Be terse and focused in your responses."
     
-    # Load and attach nextflow_README.md
-    readme_path = Path(__file__).parent.parent / "nextflow_README.md"
-    if readme_path.exists():
-        with open(readme_path, 'r', encoding='utf-8') as f:
-            readme_content = f.read()
-        return f"{base_prompt}{max_tokens_info}\n\n---\n\nAdditional Nextflow Information:\n{readme_content}"
-    
     return f"{base_prompt}{max_tokens_info}"
-
 
 def _build_messages(conversation_history: List[Dict], query: str, context: str) -> List[Dict]:
     """Build message list for LLM."""
@@ -299,14 +299,10 @@ def _add_assistant_message(session_id: str, reply: str):
 
 
 def _get_citations(query: str) -> Optional[List[str]]:
-    """Get citations for query from vector store."""
-    global citation_extractor
-    
+    """Get citations for query from vector store, with fallback to empty."""
     if not citation_extractor:
-        return None
-    
-    citations = citation_extractor.extract_from_query(query)
-    return citations if citations else None
+        return
+    return citation_extractor.extract_from_query(query)
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -356,6 +352,7 @@ async def chat(message: ChatMessage):
         
         _add_assistant_message(session_id, reply)
         citations = _get_citations(message.message)
+        # Always return citations (either from vector store or defaults)
         
         return ChatResponse(
             reply=reply,

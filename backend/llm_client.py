@@ -18,7 +18,6 @@ class LLMClient:
     def __init__(
         self,
         model: Optional[str] = None,
-        project_id: Optional[str] = None,
         location: Optional[str] = None,
         max_tokens: Optional[int] = None,
         service_account_path: Optional[str] = None
@@ -34,32 +33,19 @@ class LLMClient:
             service_account_path: Path to service account JSON file (defaults to config.SERVICE_ACCOUNT_PATH)
         """
         self.model = model or config.LLM_MODEL
-        self.project_id = project_id or config.GOOGLE_CLOUD_PROJECT
         self.location = location or "us-central1"
         self.max_tokens = max_tokens or config.LLM_MAX_TOKENS
-        
-        if not self.project_id:
-            raise ValueError("GOOGLE_CLOUD_PROJECT not set for Vertex AI")
-        
-        # Resolve service account path
-        service_account_path = service_account_path or config.SERVICE_ACCOUNT_PATH
-        if not service_account_path:
-            raise ValueError("SERVICE_ACCOUNT_PATH not set")
-        
-        # Resolve relative paths relative to project root
-        if not os.path.isabs(service_account_path):
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            service_account_path = os.path.join(project_root, service_account_path)
-        
-        if not os.path.exists(service_account_path):
-            raise ValueError(f"Service account file not found: {service_account_path}")
-        
-        # Load credentials
+
         credentials = service_account.Credentials.from_service_account_file(
-            service_account_path,
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
             scopes=['https://www.googleapis.com/auth/cloud-platform']
         )
-        
+        if not credentials:
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS missing in LLMClient!")
+        self.project_id = credentials.project_id
+        if not self.project_id:
+            raise ValueError("GOOGLE_CLOUD_PROJECT not set for Vertex AI in LLMClient!")
+    
         # Initialize client
         self.client = genai.Client(
             vertexai=True,

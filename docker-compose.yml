@@ -5,20 +5,25 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      # For local dev: can override to use local Nextflow docs instead of cloning
+      # args:
+      #   NEXTFLOW_BRANCH: master
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
-      - SERVICE_ACCOUNT_PATH=${SERVICE_ACCOUNT_PATH:-backend/white-academy-476808-f4-ecc4626c3715.json}
+      - SERVICE_ACCOUNT_PATH=${SERVICE_ACCOUNT_PATH:-}
       - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash-exp}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-1000}
-      - NEXTFLOW_DOCS_DIR=${NEXTFLOW_DOCS_DIR:-/app/docs}
-      - VECTOR_INDEX_PATH=${VECTOR_INDEX_PATH:-/app/vector_index.index}
+      - VECTOR_INDEX_PATH=${VECTOR_INDEX_PATH:-./vector_index.index}
+      # For local dev: override to use local Nextflow docs if available
+      - NEXTFLOW_DOCS_DIR=${NEXTFLOW_DOCS_DIR:-/app/nextflow-docs}
     volumes:
-      # Mount vector index if it exists locally
-      - ./backend/vector_index.index:/app/vector_index.index:ro
-      - ./backend/vector_index.data:/app/vector_index.data:ro
+      # Persistent storage for vector index (local dev)
+      - ./backend/data:/app/data
+      # Optional: Mount local Nextflow docs directory if you have it locally
+      # Uncomment and set path to your local Nextflow docs:
+      # - /Users/nickmarveaux/Dev/nextflow/docs:/app/nextflow-docs:ro
 
   frontend:
     build:

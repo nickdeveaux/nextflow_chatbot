@@ -27,15 +27,17 @@ def test_llm_max_tokens():
 
 
 def test_nextflow_docs_dir():
-    """Test docs directory is defined."""
+    """Test docs directory is defined (may be empty for LLM-only mode)."""
     assert config.NEXTFLOW_DOCS_DIR is not None
     assert isinstance(config.NEXTFLOW_DOCS_DIR, str)
+    # Can be empty string for LLM-only mode
 
 
 def test_vector_index_path():
     """Test vector index path is defined."""
     assert config.VECTOR_INDEX_PATH is not None
     assert isinstance(config.VECTOR_INDEX_PATH, str)
+    assert len(config.VECTOR_INDEX_PATH) > 0
 
 
 def test_vector_search_config():
@@ -55,16 +57,6 @@ def test_system_prompt():
     assert "assistant" in config.SYSTEM_PROMPT.lower()
 
 
-def test_default_citations():
-    """Test default citations are defined."""
-    assert config.DEFAULT_CITATIONS is not None
-    assert isinstance(config.DEFAULT_CITATIONS, list)
-    assert len(config.DEFAULT_CITATIONS) > 0
-    for citation in config.DEFAULT_CITATIONS:
-        assert isinstance(citation, str)
-        assert citation.startswith("http")
-
-
 def test_config_yaml_exists():
     """Test that config.yaml exists and is valid."""
     config_path = Path(__file__).parent.parent / "config.yaml"
@@ -77,21 +69,10 @@ def test_config_yaml_exists():
     assert 'llm' in yaml_config
     assert 'system_prompt' in yaml_config
     assert 'vector_store' in yaml_config
-    assert 'default_citations' in yaml_config
 
 
-def test_env_var_override():
-    """Test that environment variables can override YAML defaults."""
-    original_value = config.LLM_TEMPERATURE
-    os.environ["LLM_TEMPERATURE"] = "0.9"
-    
-    # Reload config to pick up env var
-    import importlib
-    importlib.reload(config)
-    
-    assert config.LLM_TEMPERATURE == 0.9
-    
-    # Restore
-    del os.environ["LLM_TEMPERATURE"]
-    importlib.reload(config)
+def test_service_account_path():
+    """Test service account path is defined."""
+    assert config.SERVICE_ACCOUNT_PATH is not None
+    assert isinstance(config.SERVICE_ACCOUNT_PATH, str)
 

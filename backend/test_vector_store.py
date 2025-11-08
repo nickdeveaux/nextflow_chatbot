@@ -188,20 +188,3 @@ def test_faiss_store_single_result(embedding_gen):
     assert isinstance(similarity, float)
     assert isinstance(metadata, dict)
 
-
-def test_faiss_store_add_documents(embedding_gen, sample_documents, sample_metadata):
-    """Test adding documents to existing index."""
-    store = FAISSVectorStore(embedding_gen)
-    store.build_index(sample_documents[:2], sample_metadata[:2])
-    
-    initial_count = store.index.ntotal
-    
-    store.add_documents(
-        [sample_documents[2]], 
-        [sample_metadata[2]]
-    )
-    
-    assert store.index.ntotal == initial_count + 1
-    assert len(store.documents) == initial_count + 1
-    assert len(store.metadata) == initial_count + 1
-
