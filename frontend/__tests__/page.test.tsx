@@ -13,6 +13,7 @@ global.fetch = jest.fn()
 jest.mock('../config', () => ({
   API_URL: 'http://localhost:8000',
   LOADING_MESSAGES: ['Thinking', 'Pondering'],
+  MAX_INPUT_LENGTH: 500000,
 }))
 
 describe('Nextflow Chat Assistant', () => {
@@ -77,7 +78,7 @@ describe('Nextflow Chat Assistant', () => {
         expect.any(Object)
       )
     }, { timeout: 1000 })
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
     expect(sendButton).toBeInTheDocument()
   })
 
@@ -89,7 +90,7 @@ describe('Nextflow Chat Assistant', () => {
         expect.any(Object)
       )
     }, { timeout: 1000 })
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
     expect(sendButton).toBeDisabled()
   })
 
@@ -102,7 +103,7 @@ describe('Nextflow Chat Assistant', () => {
       )
     }, { timeout: 1000 })
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
     
     fireEvent.change(input, { target: { value: 'Test message' } })
     expect(sendButton).not.toBeDisabled()
@@ -141,7 +142,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test message' } })
     fireEvent.click(sendButton)
@@ -193,7 +194,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Hello' } })
     fireEvent.click(sendButton)
@@ -236,7 +237,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test' } })
     fireEvent.click(sendButton)
@@ -270,7 +271,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test message' } })
     fireEvent.click(sendButton)
@@ -345,7 +346,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test' } })
     fireEvent.click(sendButton)
@@ -486,7 +487,7 @@ describe('Nextflow Chat Assistant', () => {
     })
 
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test message' } })
     fireEvent.click(sendButton)
@@ -523,7 +524,7 @@ describe('Nextflow Chat Assistant', () => {
     await waitFor(() => {
       const input = screen.getByPlaceholderText('Backend unavailable...')
       expect(input).toBeDisabled()
-      const sendButton = screen.getByText('Send')
+      const sendButton = screen.getByText('Ask')
       expect(sendButton).toBeDisabled()
     }, { timeout: 5000 })
   })
@@ -552,7 +553,7 @@ describe('Nextflow Chat Assistant', () => {
     }, { timeout: 1000 })
     
     const input = screen.getByPlaceholderText('Type your message...')
-    const sendButton = screen.getByText('Send')
+    const sendButton = screen.getByText('Ask')
 
     fireEvent.change(input, { target: { value: 'Test message' } })
     fireEvent.click(sendButton)

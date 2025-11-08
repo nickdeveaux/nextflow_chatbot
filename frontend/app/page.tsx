@@ -452,10 +452,10 @@ export default function Home() {
               onClick={handleSend}
               disabled={loading || !input.trim() || !backendAvailable}
             >
-              Send
+              Ask
             </button>
           </div>
-          {charCount > 0 && (
+          {charCount > 1000 && (
             <div className="input-footer">
               <div className={`char-counter ${isNearLimit ? 'char-counter-warning' : ''}`}>
                 {isNearLimit ? (
