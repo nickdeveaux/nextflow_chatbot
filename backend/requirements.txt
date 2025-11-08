@@ -21,7 +21,7 @@ google-genai==1.37.0
 faiss-cpu==1.12.0
 numpy>=1.25.0,<2.0
 sentence-transformers==2.2.2
---no-deps transformers==4.35.0
+transformers==4.35.0
 # Install CPU-only torch from PyTorch's wheel index (no CUDA dependencies)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
