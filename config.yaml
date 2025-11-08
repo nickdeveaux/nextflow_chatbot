@@ -3,10 +3,12 @@
 
 # API Configuration
 api:
-  service_account_path: "white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file (env: SERVICE_ACCOUNT_PATH)
+  # Service account: Set via GOOGLE_SERVICE_ACCOUNT_JSON (env, recommended) or SERVICE_ACCOUNT_PATH (env/file path)
+  # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
+  # For Railway: Use GOOGLE_SERVICE_ACCOUNT_JSON env var with JSON content, or upload file and set SERVICE_ACCOUNT_PATH
+  service_account_path: ""  # Leave empty - set via environment variables (see README.md)
   gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
   gemini_model: "gemini-2.0-flash-exp"
-  # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
 
 # LLM Configuration
 # All settings can be overridden via environment variables
@@ -49,7 +51,15 @@ system_prompt: |
   ```bash
   conda install -c bioconda nextflow
   ```
-  
+  Common Pitfalls in Nextflow Usage
+Many user errors arise from subtle mismatches between DSL1 and DSL2 syntax, misconfigured executors, or missing output files. When a user mentions operators like into, from, or an “operator not found” error, suspect a DSL mismatch—especially if nextflow.enable.dsl=2 is missing at the top of the script. If the issue concerns job submission or scheduler keywords such as “slurm,” “awsbatch,” or “executor,” guide them to inspect their process.executor configuration and confirm the active executor using nextflow config | grep executor. When a process fails with “Missing output file(s) expected by process,” it often means the declared output pattern doesn’t match what the command actually produced, or files were written to the wrong directory.
+
+Environment, Resource, and Version Problems
+Resource exhaustion is another recurring cause of task failure. Exit codes 137 or 143 typically mean the process was terminated by the system for using too much memory or exceeding its time limit. In such cases, suggest increasing the memory or time directive in the configuration and possibly using errorStrategy 'retry' with scaled resources. Environment mismatches also cause reproducibility issues; remind users to check their Nextflow version with nextflow -version, and to pin versions explicitly using NXF_VER=... nextflow run ... for consistent results across environments.
+
+Actionable Next Steps for Debugging
+Always recommend verifying the problem locally. Users can inspect the failing task directory (e.g., work/xx/yyyy.../) and run .command.run or .command.sh manually to see what failed. Encourage short, testable commands to isolate the issue—such as re-running one process with -resume after adjusting resources or syntax
+
   ## Documentation
   
   The Nextflow documentation is available for the latest [stable](https://nextflow.io/docs/latest/) and [edge](https://nextflow.io/docs/edge/) releases.
@@ -58,14 +68,14 @@ system_prompt: |
   
   You can post questions and get help in the [Nextflow community forum](https://community.seqera.io) or the [Nextflow Slack](https://www.nextflow.io/slack-invite.html). Bugs and feature requests should be reported as [GitHub issues](https://github.com/nextflow-io/nextflow/issues/new/choose).
   
-  The Nextflow community is highly active with regular community meetings, events, a podcast and more. You can view much of this material on the [Nextflow](https://www.youtube.com/@Nextflow) and [nf-core](https://www.youtube.com/@nf-core) YouTube channels.
-  
+  The Nextflow community is highly active with regular community meetings, events, a podcast and more. 
+
   The [nf-core](https://nf-co.re/) project is a community effort aggregating high quality Nextflow workflows which can be used by everyone.
   
   ## Contributing
   
-  Contributions are more than welcome. See the [CONTRIBUTING](CONTRIBUTING.md) file for details.
-  
+  Contributions are more than welcome. 
+
   ## License
   
   Nextflow is released under the Apache 2.0 license. Nextflow is a [registered trademark](https://github.com/nextflow-io/trademark).
@@ -102,18 +112,15 @@ vector_store:
 # All settings can be overridden via environment variables
 cors:
   allowed_origins:  # Comma-separated list in env: CORS_ORIGINS
-    - "http://12.202.180.110"
-    - "https://12.202.180.110"
-    - "http://12.202.180.110:3000"
-    - "https://12.202.180.110:3000"
-    - "http://12.202.180.110:80"
-    - "https://12.202.180.110:443"
+    # Add your frontend URLs here (or use CORS_ORIGINS env var)
     - "http://localhost:3000"  # Local development (Next.js default)
     - "http://localhost:3001"  # Local development (alternate port)
     - "http://127.0.0.1:3000"  # Local development
     - "http://127.0.0.1:3001"  # Local development (alternate port)
     - "http://localhost"  # For accessing frontend via localhost
     - "http://127.0.0.1"  # For accessing frontend via 127.0.0.1
+    # Add your production frontend URL here (e.g., your Vercel deployment)
+    # Or set CORS_ORIGINS env var with comma-separated list
   allow_vercel_domains: true  # Allow all *.vercel.app domains via regex (env: CORS_ALLOW_VERCEL_DOMAINS)
   vercel_domain_regex: "https?://.*\\.vercel\\.app.*"  # Regex pattern for Vercel domains (env: CORS_VERCEL_DOMAIN_REGEX)
   allow_credentials: true  # Allow credentials in CORS requests (env: CORS_ALLOW_CREDENTIALS)
@@ -133,7 +140,7 @@ frontend:
     - "Evaluating"
     - "Deliberating"
   api_url: "http://localhost:8000"  # Default for local dev - override with NEXT_PUBLIC_API_URL env var
-  # Production (Vercel): Set NEXT_PUBLIC_API_URL=https://nextflowchatbot-production.up.railway.app
-  # For IP access (12.202.180.110): Set NEXT_PUBLIC_API_URL=http://12.202.180.110:8000
-  # For Railway backend: Set NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+  # Production (Vercel frontend + Railway backend): Set NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+  # For local IP access: Set NEXT_PUBLIC_API_URL=http://your-ip:8000
+  # See SETUP_LOCAL.md for local development setup
 
