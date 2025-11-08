@@ -220,51 +220,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Nextflow Chat Assistant", lifespan=lifespan)
 
-# CORS middleware - allow specific IP and Vercel domains
-def is_allowed_origin(origin: str) -> bool:
-    """Check if origin is allowed (IP address or Vercel domain)."""
-    if not origin:
-        return False
-    
-    # Allow IP address (with or without protocol)
-    if "12.202.180.110" in origin:
-        return True
-    
-    # Allow Vercel domains (*.vercel.app)
-    if origin.endswith(".vercel.app"):
-        return True
-    
-    # Allow common Vercel patterns
-    if "vercel.app" in origin or "vercel.com" in origin:
-        return True
-    
-    return False
+# CORS middleware - configured from config.yaml
+cors_kwargs = {
+    "allow_origins": config.CORS_ALLOWED_ORIGINS,
+    "allow_credentials": config.CORS_ALLOW_CREDENTIALS,
+    "allow_methods": config.CORS_ALLOWED_METHODS,
+    "allow_headers": config.CORS_ALLOWED_HEADERS,
+}
 
-# Get allowed origins from environment or use defaults
-import re
-cors_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else []
-cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
-
-# Add default allowed origins
-default_origins = [
-    "http://12.202.180.110",
-    "https://12.202.180.110",
-    "http://12.202.180.110:3000",
-    "https://12.202.180.110:3000",
-    "http://12.202.180.110:80",
-    "https://12.202.180.110:443",
-]
-
-# Combine and deduplicate
-all_origins = list(set(default_origins + cors_origins))
+# Add Vercel domain regex if enabled (from config.yaml)
+if config.CORS_ALLOW_VERCEL_DOMAINS:
+    cors_kwargs["allow_origin_regex"] = config.CORS_VERCEL_DOMAIN_REGEX
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=all_origins,
-    allow_origin_regex=r"https?://.*\.vercel\.app.*",  # Allow any Vercel app domain
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    **cors_kwargs
 )
 
 # In-memory session storage

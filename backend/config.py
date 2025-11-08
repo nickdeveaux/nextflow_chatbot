@@ -1,11 +1,11 @@
 """
 Configuration for Nextflow Chat Assistant backend.
 Loads from shared config.yaml with environment variable overrides.
+Minimal logic - most defaults and structure are in config.yaml.
 """
 import os
 import yaml
 from pathlib import Path
-from typing import List
 import tempfile
 
 # Load YAML config
@@ -32,13 +32,19 @@ if _CONFIG_PATH is None:
 with open(_CONFIG_PATH, 'r') as f:
     _config = yaml.safe_load(f)
 
-# Priority order for service account:
-# 1. GOOGLE_SERVICE_ACCOUNT_JSON (env var with JSON content) - create temp file
-# 2. SERVICE_ACCOUNT_PATH (env var with file path)
-# 3. config.yaml value (fallback)
-SERVICE_ACCOUNT_PATH = None
+# Helper function to get config value with env override
+def _get_config(section: dict, key: str, env_key: str = None, default=None, type_fn=None):
+    """Get config value with environment variable override."""
+    env_key = env_key or key.upper()
+    env_val = os.getenv(env_key)
+    if env_val is not None:
+        return type_fn(env_val) if type_fn else env_val
+    yaml_val = section.get(key, default)
+    return type_fn(yaml_val) if type_fn and yaml_val is not None else yaml_val
 
-# First, check if JSON content is provided (Railway secret - highest priority)
+# Service Account Configuration
+# Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > config.yaml
+SERVICE_ACCOUNT_PATH = None
 google_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 if google_json and google_json.strip():
     try:
@@ -48,64 +54,76 @@ if google_json and google_json.strip():
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
     except Exception as e:
         raise ValueError(f"Failed to create service account file from GOOGLE_SERVICE_ACCOUNT_JSON: {e}")
-# Otherwise, check for file path (env var or config.yaml)
 else:
-    _service_account_path = os.getenv("SERVICE_ACCOUNT_PATH")
-    if not _service_account_path or not _service_account_path.strip():
-        # Fall back to config.yaml
-        _service_account_path = str(_config['api'].get('service_account_path', '') or '')
-    
+    _service_account_path = _get_config(
+        _config.get('api', {}), 
+        'service_account_path', 
+        'SERVICE_ACCOUNT_PATH',
+        ''
+    )
     if _service_account_path and _service_account_path.strip():
         SERVICE_ACCOUNT_PATH = _service_account_path.strip()
-        # Verify file exists if it's not an empty string
         if SERVICE_ACCOUNT_PATH and not os.path.exists(SERVICE_ACCOUNT_PATH):
-            # Don't fail here - let the LLM client handle the error with a better message
-            pass
+            pass  # Let LLM client handle the error
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
 
-# LLM Configuration (env var overrides YAML)
-LLM_MODEL = os.getenv("LLM_MODEL", _config['llm']['model'])
-LLM_TEMPERATURE = float(os.getenv(
-    "LLM_TEMPERATURE", 
-    str(_config['llm']['temperature'])
-))
-LLM_MAX_TOKENS = int(os.getenv(
-    "LLM_MAX_TOKENS", 
-    str(_config['llm']['max_tokens'])
-))
-MAX_INPUT_LENGTH = int(os.getenv(
-    "MAX_INPUT_LENGTH",
-    str(_config['llm'].get('max_input_length'))
-))
+# LLM Configuration
+_llm_config = _config.get('llm', {})
+LLM_MODEL = _get_config(_llm_config, 'model', 'LLM_MODEL', 'gemini-2.0-flash-exp')
+LLM_TEMPERATURE = _get_config(_llm_config, 'temperature', 'LLM_TEMPERATURE', 0.7, float)
+LLM_MAX_TOKENS = _get_config(_llm_config, 'max_tokens', 'LLM_MAX_TOKENS', 1000, int)
+MAX_INPUT_LENGTH = _get_config(_llm_config, 'max_input_length', 'MAX_INPUT_LENGTH', 500000, int)
 
-# Vector Store Configuration (env var overrides YAML)
-# For Railway: Use /app/data for persistent storage
-# For local: Use ./vector_index.index in current directory
-# If NEXTFLOW_DOCS_DIR is empty or not set, vector store will work in LLM-only mode
-NEXTFLOW_DOCS_DIR = os.getenv(
-    "NEXTFLOW_DOCS_DIR",
-    _config['vector_store'].get('nextflow_docs_dir', '') or ''
-).strip()
+# Vector Store Configuration
+_vector_config = _config.get('vector_store', {})
+NEXTFLOW_DOCS_DIR = _get_config(_vector_config, 'nextflow_docs_dir', 'NEXTFLOW_DOCS_DIR', '').strip()
 
-# Smart default: Use /app/data in container (Railway), ./vector_index.index for local
-_yaml_index_path = _config['vector_store'].get('index_path', '')
+# Index path resolution: env > yaml > container default > local default
+_yaml_index_path = _get_config(_vector_config, 'index_path', 'VECTOR_INDEX_PATH', '')
 if _yaml_index_path:
-    _default_index_path = _yaml_index_path
+    VECTOR_INDEX_PATH = _yaml_index_path
 elif os.path.exists('/app'):  # Running in container
-    _default_index_path = '/app/data/vector_index.index'
+    VECTOR_INDEX_PATH = '/app/data/vector_index.index'
 else:  # Local development
-    _default_index_path = './vector_index.index'
+    VECTOR_INDEX_PATH = './vector_index.index'
 
-VECTOR_INDEX_PATH = os.getenv("VECTOR_INDEX_PATH", _default_index_path)
-VECTOR_SEARCH_TOP_K = int(os.getenv(
-    "VECTOR_SEARCH_TOP_K",
-    str(_config['vector_store']['search_top_k'])
-))
-VECTOR_SEARCH_THRESHOLD = float(os.getenv(
-    "VECTOR_SEARCH_THRESHOLD",
-    str(_config['vector_store']['search_threshold'])
-))
+VECTOR_SEARCH_TOP_K = _get_config(_vector_config, 'search_top_k', 'VECTOR_SEARCH_TOP_K', 5, int)
+VECTOR_SEARCH_THRESHOLD = _get_config(_vector_config, 'search_threshold', 'VECTOR_SEARCH_THRESHOLD', 0.4, float)
 
-# System Prompt (from YAML)
-SYSTEM_PROMPT = _config['system_prompt'].strip()
+# System Prompt
+SYSTEM_PROMPT = _config.get('system_prompt', '').strip()
 
+# CORS Configuration
+_cors_config = _config.get('cors', {})
+_cors_origins_env = os.getenv("CORS_ORIGINS", "")
+CORS_ALLOWED_ORIGINS = (
+    [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+    if _cors_origins_env
+    else _cors_config.get('allowed_origins', [])
+)
+
+CORS_ALLOW_VERCEL_DOMAINS = _get_config(
+    _cors_config, 'allow_vercel_domains', 'CORS_ALLOW_VERCEL_DOMAINS', True
+)
+# Convert to bool if string
+if isinstance(CORS_ALLOW_VERCEL_DOMAINS, str):
+    CORS_ALLOW_VERCEL_DOMAINS = CORS_ALLOW_VERCEL_DOMAINS.lower() in ('true', '1', 'yes', 'on')
+
+CORS_VERCEL_DOMAIN_REGEX = _get_config(
+    _cors_config, 'vercel_domain_regex', 'CORS_VERCEL_DOMAIN_REGEX', r"https?://.*\.vercel\.app.*"
+)
+
+CORS_ALLOW_CREDENTIALS = _get_config(
+    _cors_config, 'allow_credentials', 'CORS_ALLOW_CREDENTIALS', True
+)
+# Convert to bool if string
+if isinstance(CORS_ALLOW_CREDENTIALS, str):
+    CORS_ALLOW_CREDENTIALS = CORS_ALLOW_CREDENTIALS.lower() in ('true', '1', 'yes', 'on')
+
+CORS_ALLOWED_METHODS = _cors_config.get('allowed_methods', ["GET", "POST", "OPTIONS"])
+if os.getenv("CORS_ALLOWED_METHODS"):
+    CORS_ALLOWED_METHODS = [m.strip() for m in os.getenv("CORS_ALLOWED_METHODS").split(",")]
+
+CORS_ALLOWED_HEADERS = _cors_config.get('allowed_headers', ["*"])
+if os.getenv("CORS_ALLOWED_HEADERS"):
+    CORS_ALLOWED_HEADERS = [h.strip() for h in os.getenv("CORS_ALLOWED_HEADERS").split(",")]

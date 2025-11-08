@@ -3,16 +3,18 @@
 
 # API Configuration
 api:
-  service_account_path: "white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file
+  service_account_path: "white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file (env: SERVICE_ACCOUNT_PATH)
   gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
   gemini_model: "gemini-2.0-flash-exp"
+  # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
 
 # LLM Configuration
+# All settings can be overridden via environment variables
 llm:
-  model: "gemini-2.0-flash-exp"  # Vertex AI model name (without 'vertex_ai/' prefix)
-  temperature: 0.7
-  max_tokens: 1000  # Maximum output tokens (can be overridden via LLM_MAX_TOKENS env var)
-  max_input_length: 500000  # Maximum characters allowed in input message
+  model: "gemini-2.0-flash-exp"  # Vertex AI model name (env: LLM_MODEL)
+  temperature: 0.7  # Model temperature (env: LLM_TEMPERATURE)
+  max_tokens: 1000  # Maximum output tokens (env: LLM_MAX_TOKENS)
+  max_input_length: 500000  # Maximum characters allowed in input message (env: MAX_INPUT_LENGTH)
 
 # System Prompt
 system_prompt: |
@@ -91,9 +93,26 @@ system_prompt: |
 # If NEXTFLOW_DOCS_DIR is not set, vector store will work without docs (LLM-only mode)
 vector_store:
   nextflow_docs_dir: ""  # Optional: Set via NEXTFLOW_DOCS_DIR env var or leave empty for LLM-only
-  index_path: ""  # Auto-detected: /app/data/vector_index.index in container, ./vector_index.index locally
-  search_top_k: 5
-  search_threshold: 0.4
+  index_path: ""  # Auto-detected: /app/data/vector_index.index in container, ./vector_index.index locally (env: VECTOR_INDEX_PATH)
+  # Path resolution: index_path (yaml) > /app/data/vector_index.index (if /app exists) > ./vector_index.index (local)
+  search_top_k: 5  # Number of results to return (env: VECTOR_SEARCH_TOP_K)
+  search_threshold: 0.4  # Minimum similarity score (env: VECTOR_SEARCH_THRESHOLD)
+
+# CORS Configuration
+# All settings can be overridden via environment variables
+cors:
+  allowed_origins:  # Comma-separated list in env: CORS_ORIGINS
+    - "http://12.202.180.110"
+    - "https://12.202.180.110"
+    - "http://12.202.180.110:3000"
+    - "https://12.202.180.110:3000"
+    - "http://12.202.180.110:80"
+    - "https://12.202.180.110:443"
+  allow_vercel_domains: true  # Allow all *.vercel.app domains via regex (env: CORS_ALLOW_VERCEL_DOMAINS)
+  vercel_domain_regex: "https?://.*\\.vercel\\.app.*"  # Regex pattern for Vercel domains (env: CORS_VERCEL_DOMAIN_REGEX)
+  allow_credentials: true  # Allow credentials in CORS requests (env: CORS_ALLOW_CREDENTIALS)
+  allowed_methods: ["GET", "POST", "OPTIONS"]  # Allowed HTTP methods (env: CORS_ALLOWED_METHODS, comma-separated)
+  allowed_headers: ["*"]  # Allowed headers (env: CORS_ALLOWED_HEADERS, comma-separated)
 
 # Frontend Configuration
 frontend:
