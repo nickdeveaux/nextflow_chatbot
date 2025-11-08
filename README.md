@@ -52,10 +52,11 @@ export SERVICE_ACCOUNT_PATH="path/to/service-account.json"
 
 # Optional: Vector store (leave unset for LLM-only mode)
 # For local dev, you can point to your local Nextflow docs:
-export NEXTFLOW_DOCS_DIR="/Users/nickmarveaux/Dev/nextflow/docs"
+export NEXTFLOW_DOCS_DIR="nextflow/docs"
 # Or leave unset and the Dockerfile will clone the docs during build
 export VECTOR_INDEX_PATH="./vector_index.index"
 ```
+
 
 **Note**: 
 - Configuration is managed via `config.yaml` (shared between frontend/backend)
