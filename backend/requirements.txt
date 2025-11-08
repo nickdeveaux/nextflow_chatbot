@@ -1,5 +1,11 @@
 # Production requirements - minimal runtime dependencies
-# For Railway deployment: Start with just API packages, add vector store only if needed
+# For Railway deployment: No torch, no sentence-transformers
+# Vector store uses Google's embedding API for queries
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.28.1
 
 # Web framework
 fastapi==0.115.0
@@ -10,12 +16,9 @@ requests==2.31.0
 pyyaml==6.0.1
 
 # LLM client
-google-genai==0.2.2
+google-genai==1.37.0
 
-# Vector store dependencies - OPTIONAL (only needed if vector store is enabled)
+# Vector store - FAISS works with numpy arrays directly
+# No torch needed - embeddings come from Google's API
 faiss-cpu==1.12.0
 numpy>=1.25.0,<3.0
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.1.0+cpu
-sentence-transformers==2.2.2
-transformers==4.35.0
