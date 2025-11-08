@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "(node ../scripts/sync-config.js || echo 'Config sync skipped (using env vars)') && next build",
+    "build": "(node scripts/sync-config-standalone.js 2>/dev/null || true) && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",

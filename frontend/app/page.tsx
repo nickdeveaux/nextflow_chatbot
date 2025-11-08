@@ -6,7 +6,8 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { 
   API_URL, 
-  LOADING_MESSAGES
+  LOADING_MESSAGES,
+  MAX_INPUT_LENGTH
 } from '../config'
 
 interface Message {
@@ -111,6 +112,11 @@ export default function Home() {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
     }
   }, [input])
+
+  // Calculate character count and warning threshold
+  const charCount = input.length
+  const isNearLimit = charCount > MAX_INPUT_LENGTH * 0.9
+  const remainingChars = MAX_INPUT_LENGTH - charCount
 
   // Backend health check polling
   useEffect(() => {
@@ -429,23 +435,41 @@ export default function Home() {
 
       <div className="chat-input-container">
         <div className="chat-input-wrapper">
-          <textarea
-            ref={textareaRef}
-            className="chat-input"
-            value={input}
+          <div className="chat-input-row">
+            <textarea
+              ref={textareaRef}
+              className={`chat-input ${isNearLimit ? 'input-near-limit' : ''}`}
+              value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={backendAvailable ? "Type your message..." : "Backend unavailable..."}
-            rows={1}
-            disabled={loading || !backendAvailable}
-          />
-          <button
-            className="send-button"
-            onClick={handleSend}
-            disabled={loading || !input.trim() || !backendAvailable}
-          >
-            Send
-          </button>
+              onKeyPress={handleKeyPress}
+              placeholder={backendAvailable ? "Type your message..." : "Backend unavailable..."}
+              rows={1}
+              disabled={loading || !backendAvailable}
+              maxLength={MAX_INPUT_LENGTH}
+            />
+            <button
+              className="send-button"
+              onClick={handleSend}
+              disabled={loading || !input.trim() || !backendAvailable}
+            >
+              Send
+            </button>
+          </div>
+          {charCount > 0 && (
+            <div className="input-footer">
+              <div className={`char-counter ${isNearLimit ? 'char-counter-warning' : ''}`}>
+                {isNearLimit ? (
+                  <span className="char-counter-warning-text">
+                    {charCount.toLocaleString()} / {MAX_INPUT_LENGTH.toLocaleString()} ({remainingChars.toLocaleString()} remaining)
+                  </span>
+                ) : (
+                  <span className="char-counter-normal">
+                    {charCount.toLocaleString()} / {MAX_INPUT_LENGTH.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
