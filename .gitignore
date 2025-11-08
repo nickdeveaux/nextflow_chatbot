@@ -47,12 +47,6 @@ yarn-error.log*
 *.pyo
 *.pyd
 
-# Vector store index files
-*.index
-*.data
-vector_index.index
-vector_index.data
-
 # Config overrides (keep config.yaml, but ignore local overrides)
 config.local.yaml
 config.override.yaml
