@@ -45,17 +45,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Set environment variables (optional - defaults are in `config.yaml`):
-```bash
-# Required for Vertex AI (if not set in config.yaml):
-export GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
-
-# Optional overrides:
-export GOOGLE_VERTEX_API_KEY="your-key-here"
-export NEXTFLOW_DOCS_DIR="/path/to/docs"
-export VECTOR_INDEX_PATH="./vector_index.index"
-```
-
+4. Set environment variables (optional - defaults are in `config.yaml`)
 
 **Note**: 
 - Configuration is managed via `config.yaml` (shared between frontend/backend)
