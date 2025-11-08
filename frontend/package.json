@@ -9,7 +9,7 @@
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "sync-config": "node ../scripts/sync-config.js || echo 'Config sync skipped'"
+    "sync-config": "node ../scripts/sync-config.js || echo 'Config sync skipped (only needed for local dev)'"
   },
   "dependencies": {
     "@types/node": "^20.10.0",
