@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Setup script for Nextflow Chatbot
-echo "Setting up Nextflow Chatbot..."
+# Quick start script for Nextflow Chatbot (local development)
+echo "Setting up Nextflow Chatbot for local development..."
 
 # Backend setup
 echo "Setting up backend..."

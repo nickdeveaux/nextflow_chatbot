@@ -1,24 +1,26 @@
 # Nextflow Chat Assistant
 
-A simple TypeScript chat assistant that answers Nextflow documentation Q&A
+A chat assistant that answers Nextflow documentation questions using semantic search and LLM responses.
 
 ## Features
 
-
-- **Multi-turn conversations**: Maintains context within a session
-- **Responsive UI**: Works on desktop and mobile devices
-- **Vector search**: Semantic search over Nextflow documentation with citations
-- **Light Prompt Injection check**: Prompt injection detection and logging
-- **Error handling**: Graceful degradation with error messages
-- **Docker support**: One-command deployment with docker-compose
+- ✅ **Multi-turn conversations** - Maintains context within sessions
+- ✅ **Vector search** - Semantic search over Nextflow documentation with citations
+- ✅ **Responsive UI** - Works on desktop and mobile devices (iOS-friendly)
+- ✅ **Markdown rendering** - Rich text formatting for code blocks, links, lists
+- ✅ **Error handling** - Graceful degradation with clear error messages
+- ✅ **Loading states** - Animated loading indicators
+- ✅ **Dark mode** - Theme toggle for user preference
+- ✅ **Character limit** - Input validation with visual feedback
+- ✅ **Security** - Light prompt injection detection
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14 with TypeScript, React
-- **Backend**: FastAPI (Python)
-- **LLM**: Gemini 2.0 Flash via Google Vertex AI (using google-genai SDK)
-- **Vector Store**: FAISS with sentence-transformers for semantic search (free, offline)
-- **Deployment**: Docker containers, Railway-ready
+- **Frontend**: Next.js 14 with TypeScript, React, Markdown rendering
+- **Backend**: FastAPI (Python) with async support
+- **LLM**: Google Gemini 2.0 Flash via Vertex AI
+- **Vector Store**: FAISS with sentence-transformers for semantic search
+- **Deployment**: Railway (backend) + Vercel (frontend) or Railway (full stack)
 
 ## Local Setup
 
@@ -47,23 +49,21 @@ pip install -r requirements.txt
 
 4. Set environment variables (optional - defaults are in `config.yaml`):
 ```bash
-# Required for Vertex AI:
-export SERVICE_ACCOUNT_PATH="path/to/service-account.json"
+# Required for Vertex AI (choose one method):
+export GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'  # Recommended: JSON content
+# OR
+export SERVICE_ACCOUNT_PATH="path/to/service-account.json"  # File path
 
-# Optional: Vector store (leave unset for LLM-only mode)
-# For local dev, you can point to your local Nextflow docs:
-export NEXTFLOW_DOCS_DIR="nextflow/docs"
-# Or leave unset and the Dockerfile will clone the docs during build
-export VECTOR_INDEX_PATH="./vector_index.index"
+# Optional: Vector store configuration
+export NEXTFLOW_DOCS_DIR="path/to/nextflow/docs"  # Local docs directory (optional)
+export VECTOR_INDEX_PATH="./vector_index.index"  # Local index path (optional)
 ```
-
 
 **Note**: 
 - Configuration is managed via `config.yaml` (shared between frontend/backend)
-- Vector store is optional - if `NEXTFLOW_DOCS_DIR` is not set, the app runs in LLM-only mode
-- **For Railway**: Docs are automatically cloned from GitHub during Docker build
-- **For local dev**: You can use your local Nextflow docs directory, or let Docker clone them
-- The vector store will automatically build an index from your Nextflow docs on first run (if docs are provided)
+- Service account can be provided via `GOOGLE_SERVICE_ACCOUNT_JSON` (env var with JSON) or `SERVICE_ACCOUNT_PATH` (file path)
+- Vector store requires Nextflow docs - they're automatically cloned during Docker build, or set `NEXTFLOW_DOCS_DIR` for local dev
+- The vector store will automatically build an index from Nextflow docs on first run
 
 5. Run the backend server:
 ```bash
@@ -104,100 +104,75 @@ The frontend will be available at `http://localhost:3000`
 
 ## Deployment
 
-### Railway Deployment (Recommended)
+### Recommended: Railway (Backend) + Vercel (Frontend)
 
-Railway supports Docker deployments and is perfect for this full-stack application.
+This is the recommended deployment setup:
+- **Backend**: Deploy to Railway (Docker-based, supports persistent storage)
+- **Frontend**: Deploy to Vercel (optimized for Next.js, CDN)
 
-#### Prerequisites
+#### Deploy Backend to Railway
 
-- A [Railway](https://railway.app) account (free tier available)
-- GitHub repository with your code
-- Google Cloud service account JSON file for Vertex AI
-
-#### Step 1: Deploy Backend to Railway
-
-1. **Create a new Railway project**:
+1. **Create a Railway project**:
    - Go to [Railway.app](https://railway.app) and sign up/login
    - Click "New Project" → "Deploy from GitHub repo"
    - Select your repository
 
 2. **Configure the backend service**:
    - Railway will auto-detect the Dockerfile in `backend/Dockerfile`
-   - If not detected, manually set:
+   - The app automatically uses Railway's `PORT` environment variable (no configuration needed)
+   - If not auto-detected, manually set:
      - **Root Directory**: Leave empty (builds from project root)
      - **Dockerfile Path**: `backend/Dockerfile`
-     - **Build Context**: Project root
 
-3. **Set environment variables** in Railway dashboard:
+3. **Set environment variables** in Railway:
    ```
-   SERVICE_ACCOUNT_PATH=/app/service-account.json
+   # Required: Service account (choose one method)
+   GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}  # Recommended: JSON content as env var
+   # OR
+   SERVICE_ACCOUNT_PATH=/app/service-account.json  # If uploading file
+   
+   # Optional: LLM configuration
    LLM_MODEL=gemini-2.0-flash-exp
    LLM_MAX_TOKENS=1000
+   
+   # Optional: Vector store
    VECTOR_INDEX_PATH=/app/data/vector_index.index
-   # Nextflow docs are automatically cloned during build (from master branch)
-   # To use a different branch/tag, set NEXTFLOW_BRANCH build arg (e.g., "v24.04.0")
-   # NEXTFLOW_DOCS_DIR defaults to /app/nextflow-docs (auto-cloned)
-   ```
-
-4. **Add service account file**:
-   - In Railway, go to your service → Variables
-   - Add a file variable or upload your service account JSON file
-   - Set `SERVICE_ACCOUNT_PATH` to point to the file location
-
-5. **Set up persistent storage** (for vector index):
-   - Railway provides persistent volumes automatically
-   - The vector index will be stored in `/app/data/` (created automatically)
-   - On first startup, the index will be built from the cloned Nextflow docs
-   - On subsequent startups, the existing index will be loaded
-   - **Note**: The Nextflow docs are cloned during Docker build, so they're included in the image
-   - To pin to a specific Nextflow version, set the `NEXTFLOW_BRANCH` build argument (e.g., `v24.04.0`)
-
-5. **Deploy**:
-   - Railway will automatically build and deploy
-   - Once deployed, Railway will provide a URL like: `https://your-backend.railway.app`
-   - Copy this URL for the frontend configuration
-
-#### Step 2: Deploy Frontend to Railway
-
-1. **Add a new service** in the same Railway project:
-   - Click "New" → "GitHub Repo" (select the same repo)
-   - Or add a service to the existing project
-
-2. **Configure the frontend service**:
-   - Set **Root Directory**: Leave empty
-   - Set **Dockerfile Path**: `frontend/Dockerfile`
-   - Railway will auto-detect Next.js
-
-3. **Set environment variables**:
-   ```
-   NEXT_PUBLIC_API_URL=https://your-backend.railway.app
-   PORT=3000  # Railway sets this automatically
-   NODE_ENV=production
+   NEXTFLOW_DOCS_DIR=/app/nextflow-docs  # Auto-cloned during build
    ```
 
 4. **Deploy**:
-   - Railway will build and deploy the frontend
-   - You'll get a URL like: `https://your-frontend.railway.app`
+   - Railway will build and deploy automatically
+   - Once deployed, copy the backend URL (e.g., `https://your-backend.railway.app`)
 
-#### Step 3: Update CORS (if needed)
+#### Deploy Frontend to Vercel
 
-The backend already allows all origins (`allow_origins=["*"]`), but for production you may want to restrict it:
+See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for detailed instructions.
 
-```python
-# In backend/main.py, update CORS origins:
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://your-frontend.railway.app",  # Your Railway frontend URL
-        "http://localhost:3000"  # For local dev
-    ],
-    ...
-)
-```
+**Quick steps**:
+1. Connect your GitHub repo to Vercel
+2. Set **Root Directory** to `frontend`
+3. Set environment variable: `NEXT_PUBLIC_API_URL=https://your-backend.railway.app`
+4. Deploy
+
+The frontend will be available at a Vercel URL (e.g., `https://your-app.vercel.app`).
+
+#### Configure CORS
+
+The backend automatically allows Vercel domains via regex pattern (configured in `config.yaml`). For additional origins, add them to `config.yaml` → `cors.allowed_origins` or set `CORS_ORIGINS` environment variable.
+
+### Alternative: Railway for Both (Full Stack)
+
+You can also deploy both backend and frontend to Railway:
+
+1. **Deploy backend** (see above)
+2. **Add frontend service** in the same Railway project:
+   - Set **Dockerfile Path**: `frontend/Dockerfile`
+   - Set `NEXT_PUBLIC_API_URL=https://your-backend.railway.app`
+3. **Update CORS** in `config.yaml` to include your Railway frontend URL
 
 ### Local Development with Docker
 
-You can also run the entire stack locally with Docker Compose:
+Run the entire stack locally with Docker Compose:
 
 ```bash
 # Build and start both services
@@ -212,23 +187,46 @@ See `docker-compose.yml` for configuration details.
 ### Environment Variables Reference
 
 **Backend** (Railway):
-- `GOOGLE_CLOUD_PROJECT` - Your GCP project ID (required)
-- `SERVICE_ACCOUNT_PATH` - Path to service account JSON (required)
-- `LLM_MODEL` - Model name (default: `gemini-2.0-flash-exp`)
-- `LLM_MAX_TOKENS` - Max output tokens (default: `1000`)
+- `GOOGLE_SERVICE_ACCOUNT_JSON` - Service account JSON content as string (recommended)
+- `SERVICE_ACCOUNT_PATH` - Path to service account JSON file (alternative to above)
+- `LLM_MODEL` - Model name (default: `gemini-2.0-flash-exp`, override via env)
+- `LLM_MAX_TOKENS` - Max output tokens (default: `1000`, override via env)
+- `LLM_TEMPERATURE` - Model temperature (default: `0.7`, override via env)
 - `VECTOR_INDEX_PATH` - Vector index path (default: `/app/data/vector_index.index`)
-- `NEXTFLOW_DOCS_DIR` - Optional: Path to Nextflow docs (if not set, runs in LLM-only mode)
+- `NEXTFLOW_DOCS_DIR` - Path to Nextflow docs (default: `/app/nextflow-docs`, auto-cloned)
+- `CORS_ORIGINS` - Comma-separated list of allowed origins (optional, defaults in `config.yaml`)
 - `PORT` - Server port (Railway sets automatically)
 
-**Frontend** (Railway):
-- `NEXT_PUBLIC_API_URL` - Backend API URL (required)
-- `PORT` - Server port (Railway sets automatically)
+**Frontend** (Vercel/Railway):
+- `NEXT_PUBLIC_API_URL` - Backend API URL (required for production)
+- `NEXT_PUBLIC_LOADING_MESSAGES` - Comma-separated loading messages (optional)
+- `NEXT_PUBLIC_MAX_INPUT_LENGTH` - Max input length (optional, default: 500000)
 
-## Demo URL
+## Architecture Overview
 
-**Deployed URL**: [Add your Railway deployment URL here after deployment]
+```
+┌─────────────┐         ┌──────────────┐         ┌─────────────┐
+│   Frontend  │────────▶│   Backend    │────────▶│  Vector     │
+│  (Next.js)  │  HTTP   │   (FastAPI)  │  Query  │   Store     │
+│   (Vercel)  │         │  (Railway)   │         │   (FAISS)   │
+└─────────────┘         └──────────────┘         └─────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │  Vertex AI   │
+                        │   (Gemini)   │
+                        └──────────────┘
+```
 
-**Note**: 
+**Data Flow**:
+1. User sends message → Frontend
+2. Frontend → Backend API (`/chat`)
+3. Backend searches vector store for relevant docs
+4. Backend calls Gemini LLM with context
+5. Backend returns response with citations → Frontend
+6. Frontend renders markdown response
+
+**Notes**:
 - Vector store index is built on first startup (may take a few minutes)
 - Chat history is preserved within sessions but not persisted across restarts
 

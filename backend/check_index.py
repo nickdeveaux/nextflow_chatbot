@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Check if vector index exists and report status.
+Used in Dockerfile to determine if index needs to be built.
 """
 import os
 import sys
@@ -12,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 try:
     from vector_store.index_utils import check_index_exists
 except ImportError:
-    # Fallback if vector_store not available
+    # Fallback if vector_store not available (shouldn't happen in Docker, but handle gracefully)
     try:
         import config
     except ImportError:
@@ -27,25 +28,24 @@ except ImportError:
 
 
 def check_index():
-    """Check if vector index exists and print status."""
-    index_exists, index_path, data_path = check_index_exists()
+    """Check if vector index exists and return exit code.
     
-    print(f"Index path: {index_path}")
-    print(f"Data path: {data_path}")
-    print(f"Index exists: {index_exists}")
+    Returns:
+        0 if index exists, 1 if index doesn't exist
+    """
+    index_exists, index_path, data_path = check_index_exists()
     
     if index_exists:
         # Check file sizes
         index_size = os.path.getsize(index_path) / (1024 * 1024)  # MB
         data_size = os.path.getsize(data_path) / (1024 * 1024)  # MB
-        print(f"Index size: {index_size:.2f} MB")
-        print(f"Data size: {data_size:.2f} MB")
-        print("\n✓ Index files found - ready for vector search")
+        print(f"✓ Index found at {index_path}")
+        print(f"  Index size: {index_size:.2f} MB")
+        print(f"  Data size: {data_size:.2f} MB")
         return 0
     else:
-        print("\n✗ Index files not found")
-        print("  To build index: Set BUILD_INDEX=true and NEXTFLOW_DOCS_DIR")
-        print("  Or commit pre-built index files to repository")
+        print(f"✗ Index not found at {index_path}")
+        print("  Index will be built during Docker build")
         return 1
 
 

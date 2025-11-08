@@ -7,20 +7,17 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy config and check scripts
+# Copy config and check script early (needed for index check)
 COPY config.yaml ./
 COPY backend/config.py backend/check_index.py ./
 
 # Copy backend directory (includes code, requirements, and optional index files)
 COPY backend/ ./backend/
 
-# Check if vector index exists in repo
-RUN python check_index.py || echo "Index check: No index found"
-
-# Install requirements (CPU-only)
+# Install requirements (CPU-only) - needed for check_index.py
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Create persistent data directory first (needed for index files)
+# Create persistent data directory (needed for index files)
 RUN mkdir -p /app/data
 
 # Move backend code to app root (for uvicorn) and index files if they exist
@@ -45,28 +42,27 @@ RUN cp backend/main.py \
         echo "✗ No pre-built index files found in repo"; \
     fi
 
-# Clone Nextflow docs for building index (only if BUILD_INDEX is true)
-# This allows the index to be built at runtime if needed
+# Check if index exists (in /app/data after copying from repo)
+# If index exists, skip cloning docs (saves build time and image size)
+# If index doesn't exist, clone docs so index can be built at runtime
 ARG NEXTFLOW_BRANCH=master
-ARG BUILD_INDEX=true
-RUN if [ "$BUILD_INDEX" = "true" ]; then \
-    echo "Cloning Nextflow docs for index building..."; \
-    git clone --depth 1 --branch ${NEXTFLOW_BRANCH} https://github.com/nextflow-io/nextflow.git /tmp/nextflow && \
-    mv /tmp/nextflow/docs /app/nextflow-docs && \
-    rm -rf /tmp/nextflow && \
-    echo "✓ Nextflow docs cloned to /app/nextflow-docs"; \
+RUN if python check_index.py; then \
+        echo "✓ Index exists - skipping docs clone (index will be loaded at runtime)"; \
     else \
-    echo "Skipping Nextflow docs clone (BUILD_INDEX=false)"; \
+        echo "✗ Index not found - cloning docs for index build at runtime"; \
+        git clone --depth 1 --branch ${NEXTFLOW_BRANCH} https://github.com/nextflow-io/nextflow.git /tmp/nextflow && \
+        mv /tmp/nextflow/docs /app/nextflow-docs && \
+        rm -rf /tmp/nextflow && \
+        echo "✓ Nextflow docs cloned to /app/nextflow-docs"; \
     fi
 
-# Set NEXTFLOW_DOCS_DIR if docs were cloned
+# Set NEXTFLOW_DOCS_DIR environment variable
+# If index exists: docs won't be cloned, but ENV is set (runtime won't need docs since index exists)
+# If index doesn't exist: docs are cloned, ENV points to them (runtime will use docs to build index)
 ENV NEXTFLOW_DOCS_DIR=/app/nextflow-docs
 
-# Verify final index status
-RUN python check_index.py || echo "Final check completed"
-
-EXPOSE 8000
-
-# Start uvicorn on port 8000 (Railway handles port mapping)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use PORT environment variable (Railway sets this automatically)
+# Defaults to 8000 for local dev, but Railway will provide its own PORT
+# EXPOSE is not needed - Railway handles port mapping automatically
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
 

@@ -1,6 +1,5 @@
 """
 Utility functions for vector index management.
-Shared with check_index.py to avoid code duplication.
 """
 import os
 import config

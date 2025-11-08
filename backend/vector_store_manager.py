@@ -108,23 +108,25 @@ def load_or_build_index(vector_store: Optional[FAISSVectorStore]):
     # Ensure data directory exists
     ensure_index_directory(index_path)
     
-    # Use docs directory from config (should be set by Dockerfile to /app/nextflow-docs)
+    # Use docs directory from config (set by Dockerfile if index needs to be built)
     docs_dir = config.NEXTFLOW_DOCS_DIR
     
-    # If docs_dir is not set, try default location
-    if not docs_dir:
-        # Default location where Dockerfile clones docs
+    # If docs_dir is not set or empty, try default location
+    if not docs_dir or not docs_dir.strip():
+        # Default location where Dockerfile clones docs (only if index doesn't exist)
         if os.path.exists("/app/nextflow-docs"):
             docs_dir = "/app/nextflow-docs"
         else:
-            logger.error("NEXTFLOW_DOCS_DIR not set and /app/nextflow-docs not found")
-            logger.error("Dockerfile should clone Nextflow docs during build")
+            # If index doesn't exist and docs don't exist, we can't build
+            logger.error("Index not found and NEXTFLOW_DOCS_DIR not set")
+            logger.error("Dockerfile should clone Nextflow docs when index doesn't exist")
             return
     
     # Check if docs directory exists
     if not os.path.exists(docs_dir):
+        # Docs directory was set but doesn't exist - this shouldn't happen, but handle gracefully
         logger.error(f"Docs directory not found: {docs_dir}")
-        logger.error("Ensure Dockerfile clones Nextflow docs or set NEXTFLOW_DOCS_DIR")
+        logger.error("If index doesn't exist, ensure Dockerfile clones Nextflow docs")
         return
     
     # Build index from documentation
