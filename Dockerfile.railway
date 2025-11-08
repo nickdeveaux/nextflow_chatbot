@@ -1,0 +1,238 @@
+# Multi-stage Dockerfile for Railway deployment
+# Serves both frontend (Next.js) and backend (FastAPI) in a single container
+# Uses a simple reverse proxy to route requests
+
+# ============================================================================
+# Stage 1: Build Frontend (Next.js)
+# ============================================================================
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy frontend package files
+COPY frontend/package.json frontend/package-lock.json* ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source and config files
+COPY frontend/ ./
+COPY config.yaml ../config.yaml
+COPY scripts/sync-config.js ../scripts/sync-config.js
+
+# Sync config before build
+# API_URL will be relative since we serve from same origin
+RUN node ../scripts/sync-config.js
+
+# Build Next.js app (standalone mode)
+RUN npm run build
+
+# ============================================================================
+# Stage 2: Build Backend (Python/FastAPI)
+# ============================================================================
+FROM python:3.11-slim AS backend-setup
+
+WORKDIR /app
+
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy config and check script
+COPY config.yaml ./
+COPY backend/config.py backend/check_index.py ./
+
+# Copy backend directory
+COPY backend/ ./backend/
+
+# Check if vector index exists
+RUN python check_index.py || echo "Index check: No index found"
+
+# Install production requirements
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Create persistent data directory
+RUN mkdir -p /app/data
+
+# Move backend code to app root
+RUN cp backend/main.py backend/llm_client.py backend/citations.py ./ && \
+    cp -r backend/vector_store ./vector_store/ && \
+    if [ -f backend/vector_index.index ] && [ -f backend/vector_index.data ]; then \
+        cp backend/vector_index.index backend/vector_index.data /app/data/ && \
+        echo "✓ Pre-built index files copied"; \
+    fi
+
+# Conditionally install build requirements
+ARG BUILD_INDEX=false
+COPY backend/requirements-build-index.txt* ./
+RUN if [ "$BUILD_INDEX" = "true" ] && [ -f requirements-build-index.txt ]; then \
+    echo "Installing build requirements..."; \
+    pip install --no-cache-dir -r requirements-build-index.txt; \
+    fi
+
+# Optional: Clone Nextflow docs
+ARG NEXTFLOW_BRANCH=master
+RUN if [ "$BUILD_INDEX" = "true" ]; then \
+    echo "Cloning Nextflow docs..."; \
+    git clone --depth 1 --branch ${NEXTFLOW_BRANCH} https://github.com/nextflow-io/nextflow.git /tmp/nextflow && \
+    mv /tmp/nextflow/docs /app/nextflow-docs && \
+    rm -rf /tmp/nextflow; \
+    fi
+
+# Verify index status
+RUN python check_index.py || echo "Final check completed"
+
+# ============================================================================
+# Stage 3: Final Production Image
+# ============================================================================
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install Node.js for running Next.js and reverse proxy
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy backend from backend-setup stage
+COPY --from=backend-setup /app ./
+
+# Copy frontend standalone build
+COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend
+COPY --from=frontend-builder /app/frontend/.next/static ./frontend/.next/static
+COPY --from=frontend-builder /app/frontend/public ./frontend/public
+
+# Create simple reverse proxy server
+RUN cat > /app/proxy.js << 'EOFJS'
+const http = require('http');
+const httpProxy = require('http-proxy');
+
+const PORT = process.env.PORT || 8000;
+const FRONTEND_PORT = 3000;
+const BACKEND_PORT = 8001;
+
+const proxy = httpProxy.createProxyServer({});
+
+// Create proxy server
+const server = http.createServer((req, res) => {
+  const url = req.url;
+  
+  // Route API calls to FastAPI backend
+  if (url.startsWith('/chat') || url.startsWith('/health')) {
+    console.log(`[PROXY] ${req.method} ${url} -> Backend :${BACKEND_PORT}`);
+    proxy.web(req, res, {
+      target: `http://localhost:${BACKEND_PORT}`,
+    }, (err) => {
+      console.error('[PROXY] Backend error:', err);
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
+      res.end('Backend service unavailable');
+    });
+  } else {
+    // Route everything else to Next.js frontend
+    console.log(`[PROXY] ${req.method} ${url} -> Frontend :${FRONTEND_PORT}`);
+    proxy.web(req, res, {
+      target: `http://localhost:${FRONTEND_PORT}`,
+    }, (err) => {
+      console.error('[PROXY] Frontend error:', err);
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
+      res.end('Frontend service unavailable');
+    });
+  }
+});
+
+proxy.on('error', (err, req, res) => {
+  console.error('[PROXY] Proxy error:', err);
+  if (!res.headersSent) {
+    res.writeHead(502, { 'Content-Type': 'text/plain' });
+    res.end('Proxy error');
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[PROXY] Reverse proxy listening on port ${PORT}`);
+  console.log(`[PROXY] Frontend: http://localhost:${FRONTEND_PORT}`);
+  console.log(`[PROXY] Backend: http://localhost:${BACKEND_PORT}`);
+});
+EOFJS
+
+# Install http-proxy for reverse proxy
+RUN npm install http-proxy --save --prefix /app
+
+# Create startup script
+RUN cat > /app/start.sh << 'EOFSH'
+#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "Starting Nextflow Chat Assistant"
+echo "=========================================="
+
+# Start FastAPI backend
+echo "Starting FastAPI backend on port 8001..."
+cd /app
+uvicorn main:app --host 0.0.0.0 --port 8001 > /tmp/backend.log 2>&1 &
+BACKEND_PID=$!
+
+# Wait for backend to be ready
+echo "Waiting for backend to start..."
+for i in {1..30}; do
+  if curl -f http://localhost:8001/health > /dev/null 2>&1; then
+    echo "✓ Backend is ready!"
+    break
+  fi
+  if [ $i -eq 30 ]; then
+    echo "✗ Backend failed to start (check logs)"
+    cat /tmp/backend.log
+    exit 1
+  fi
+  sleep 1
+done
+
+# Start Next.js frontend
+echo "Starting Next.js frontend on port 3000..."
+cd /app/frontend
+PORT=3000 node server.js > /tmp/frontend.log 2>&1 &
+FRONTEND_PID=$!
+
+# Wait for frontend to be ready
+echo "Waiting for frontend to start..."
+for i in {1..30}; do
+  if curl -f http://localhost:3000 > /dev/null 2>&1; then
+    echo "✓ Frontend is ready!"
+    break
+  fi
+  if [ $i -eq 30 ]; then
+    echo "✗ Frontend failed to start (check logs)"
+    cat /tmp/frontend.log
+    exit 1
+  fi
+  sleep 1
+done
+
+# Start reverse proxy (this is the main process)
+echo "Starting reverse proxy on port ${PORT:-8000}..."
+echo "=========================================="
+cd /app
+PORT=${PORT:-8000} node proxy.js
+
+# If proxy exits, cleanup
+kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+EOFSH
+
+RUN chmod +x /app/start.sh
+
+EXPOSE 8000
+
+ENV PORT=8000
+ENV NODE_ENV=production
+
+# Health check (Railway will use this)
+# Note: Railway provides PORT env var, health check uses 8000 as default
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Start the unified server
+CMD ["/app/start.sh"]
