@@ -9,7 +9,6 @@ import warnings
 
 # Suppress Python warnings (they show as errors in Railway)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
-warnings.filterwarnings('ignore', category=UserWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 

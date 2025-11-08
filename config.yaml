@@ -60,7 +60,7 @@ system_prompt: |
   
   ## Actionable Next Steps for Debugging
   
-  Always recommend verifying the problem locally. Users can inspect the failing task directory (e.g., work/xx/yyyy.../) and run .command.run or .command.sh manually to see what failed. Encourage short, testable commands to isolate the issue—such as re-running one process with -resume after adjusting resources or syntax.
+  Always recommend verifying the problem locally. Users can inspect the failing task directory (e.g., work/xx/yyyy.../) and run .command.run or .command.sh manually to see what failed. Encourage short, testable commands to isolate the issue—such as re-running one process with -resume after adjusting resources or syntax. You can export NXF_VER=<version> to pin a version in the CLI. 
 
   ## Documentation
   
