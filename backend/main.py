@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from contextlib import asynccontextmanager
+from pathlib import Path
 import os
 import logging
 from datetime import datetime
@@ -158,8 +159,20 @@ def get_knowledge_context(query: str) -> str:
         return ""
 
 def _get_system_prompt() -> str:
-    """Get Nextflow-specific system prompt."""
-    return config.SYSTEM_PROMPT
+    """Get Nextflow-specific system prompt with README attached."""
+    base_prompt = config.SYSTEM_PROMPT
+    
+    # Add max_output_tokens information to prompt
+    max_tokens_info = f"\n\nIMPORTANT: Keep responses concise. You have a maximum output limit of {config.LLM_MAX_TOKENS} tokens. Be terse and focused in your responses."
+    
+    # Load and attach nextflow_README.md
+    readme_path = Path(__file__).parent.parent / "nextflow_README.md"
+    if readme_path.exists():
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            readme_content = f.read()
+        return f"{base_prompt}{max_tokens_info}\n\n---\n\nAdditional Nextflow Information:\n{readme_content}"
+    
+    return f"{base_prompt}{max_tokens_info}"
 
 
 def _build_messages(conversation_history: List[Dict], query: str, context: str) -> List[Dict]:
@@ -218,6 +231,42 @@ async def get_llm_response(
                 status_code=500, 
                 detail=f"LLM service unavailable: {str(e2)}"
             )
+
+def _check_prompt_injection(message: str) -> bool:
+    """
+    Light guardrail to detect potential prompt injection attempts.
+    Returns True if suspicious patterns are detected.
+    """
+    message_lower = message.lower()
+    
+    # Common prompt injection patterns
+    suspicious_patterns = [
+        "ignore previous instructions",
+        "forget your role",
+        "you are now",
+        "act as",
+        "pretend to be",
+        "new instructions:",
+        "override",
+        "new system prompt",
+        "previous prompt",
+        "original prompt",
+    ]
+    
+    # Check for suspicious patterns
+    for pattern in suspicious_patterns:
+        if pattern in message_lower:
+            logger.warning(f"Potential prompt injection detected: pattern '{pattern}' in message")
+            return True
+    
+    # Check for excessive role-playing attempts (multiple role indicators)
+    role_indicators = message_lower.count("you are") + message_lower.count("you're")
+    if role_indicators > 2:
+        logger.warning(f"Potential prompt injection: excessive role indicators ({role_indicators})")
+        return True
+    
+    return False
+
 
 def _get_or_create_session(session_id: Optional[str]) -> str:
     """Get existing session or create new one."""
@@ -278,6 +327,12 @@ async def chat(message: ChatMessage):
                 status_code=400,
                 detail=f"Input message is too large ({input_length:,} characters). Maximum allowed is {config.MAX_INPUT_LENGTH:,} characters."
             )
+        
+        # Light guardrail: check for prompt injection attempts
+        if _check_prompt_injection(message.message):
+            # Log but don't block - let the LLM handle it with its system prompt
+            # This is a lightweight guardrail that just raises awareness
+            logger.info("Prompt injection pattern detected, but allowing through (LLM system prompt should handle)")
         
         session_id = _get_or_create_session(message.session_id)
         

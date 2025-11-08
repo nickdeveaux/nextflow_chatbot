@@ -60,3 +60,4 @@ config.override.yaml
 # Service account credentials
 backend/*-*.json
 **/service-account*.json
+.next/

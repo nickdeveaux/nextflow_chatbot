@@ -13,8 +13,6 @@ global.fetch = jest.fn()
 jest.mock('../config', () => ({
   API_URL: 'http://localhost:8000',
   LOADING_MESSAGES: ['Thinking', 'Pondering'],
-  SYSTEM_PROMPT: 'Test system prompt',
-  getGeminiApiUrl: jest.fn(() => 'https://test-api-url.com'),
 }))
 
 describe('Nextflow Chat Assistant', () => {
@@ -22,6 +20,17 @@ describe('Nextflow Chat Assistant', () => {
     (fetch as jest.Mock).mockClear()
     Storage.prototype.getItem = jest.fn(() => null)
     Storage.prototype.setItem = jest.fn()
+    
+    // Mock health check endpoint to return success by default
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
   })
 
   it('renders the header', () => {
@@ -68,9 +77,20 @@ describe('Nextflow Chat Assistant', () => {
       citations: null
     }
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockResponse,
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
     })
 
     render(<Home />)
@@ -81,12 +101,17 @@ describe('Nextflow Chat Assistant', () => {
     fireEvent.click(sendButton)
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalled()
+      const chatCalls = (fetch as jest.Mock).mock.calls.filter(
+        call => call[0]?.includes('/chat')
+      )
+      expect(chatCalls.length).toBeGreaterThan(0)
     })
 
-    const fetchCall = (fetch as jest.Mock).mock.calls[0]
-    expect(fetchCall[0]).toContain('/chat')
-    expect(fetchCall[1].method).toBe('POST')
+    const chatCall = (fetch as jest.Mock).mock.calls.find(
+      call => call[0]?.includes('/chat')
+    )
+    expect(chatCall[0]).toContain('/chat')
+    expect(chatCall[1].method).toBe('POST')
   })
 
   it('displays user message after sending', async () => {
@@ -96,9 +121,20 @@ describe('Nextflow Chat Assistant', () => {
       citations: null
     }
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockResponse,
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
     })
 
     render(<Home />)
@@ -120,9 +156,20 @@ describe('Nextflow Chat Assistant', () => {
       citations: null
     }
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockResponse,
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
     })
 
     render(<Home />)
@@ -137,8 +184,19 @@ describe('Nextflow Chat Assistant', () => {
     })
   })
 
-  it('handles API errors gracefully', async () => {
-    ;(fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'))
+  it('handles API errors gracefully and preserves user message', async () => {
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.reject(new Error('Network error'))
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
 
     render(<Home />)
     const input = screen.getByPlaceholderText('Type your message...')
@@ -148,7 +206,10 @@ describe('Nextflow Chat Assistant', () => {
     fireEvent.click(sendButton)
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalled()
+      // User message should still be in the chat
+      expect(screen.getByText('Test message')).toBeInTheDocument()
+      // Error message should be shown
+      expect(screen.getByText(/Failed to send message/i)).toBeInTheDocument()
     })
   })
 
@@ -176,9 +237,20 @@ describe('Nextflow Chat Assistant', () => {
       citations: ['https://example.com/doc1', 'https://example.com/doc2']
     }
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockResponse,
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
     })
 
     render(<Home />)
@@ -201,29 +273,182 @@ describe('Nextflow Chat Assistant', () => {
       citations: null
     }
 
-    ;(fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockResponse,
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
     })
 
     render(<Home />)
-    const input = screen.getByPlaceholderText('Type your message...')
+    const input = screen.getByPlaceholderText('Type your message...') as HTMLTextAreaElement
 
     fireEvent.change(input, { target: { value: 'Test' } })
-    fireEvent.keyPress(input, { key: 'Enter', code: 'Enter' })
+    // Simulate Enter key press (not Shift+Enter)
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', keyCode: 13, shiftKey: false })
+    fireEvent.keyPress(input, { key: 'Enter', code: 'Enter', keyCode: 13, shiftKey: false })
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalled()
-    })
+      const chatCalls = (fetch as jest.Mock).mock.calls.filter(
+        call => call[0]?.includes('/chat')
+      )
+      expect(chatCalls.length).toBeGreaterThan(0)
+    }, { timeout: 3000 })
   })
 
   it('does not send on Shift+Enter', () => {
     render(<Home />)
     const input = screen.getByPlaceholderText('Type your message...')
 
+    // Clear health check calls
+    ;(fetch as jest.Mock).mockClear()
+
     fireEvent.change(input, { target: { value: 'Test' } })
     fireEvent.keyPress(input, { key: 'Enter', shiftKey: true })
 
-    expect(fetch).not.toHaveBeenCalled()
+    // Should not have called /chat endpoint
+    const chatCalls = (fetch as jest.Mock).mock.calls.filter(
+      call => call[0]?.includes('/chat')
+    )
+    expect(chatCalls.length).toBe(0)
   })
+
+  it('shows modal when backend is unavailable', async () => {
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.reject(new Error('Backend unavailable'))
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    render(<Home />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Backend Unavailable')).toBeInTheDocument()
+      expect(screen.getByText(/The backend service is currently unavailable/i)).toBeInTheDocument()
+    }, { timeout: 5000 })
+  })
+
+  it('shows download button in modal when messages exist', async () => {
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.reject(new Error('Backend unavailable'))
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            reply: 'Test response',
+            session_id: 'test-session-id',
+            citations: null
+          }),
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    render(<Home />)
+    
+    // First, add a message (before backend goes down)
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            reply: 'Test response',
+            session_id: 'test-session-id',
+            citations: null
+          }),
+        })
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    const input = screen.getByPlaceholderText('Type your message...')
+    const sendButton = screen.getByText('Send')
+
+    fireEvent.change(input, { target: { value: 'Test message' } })
+    fireEvent.click(sendButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test message')).toBeInTheDocument()
+    })
+
+    // Now simulate backend going down
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.reject(new Error('Backend unavailable'))
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    // Trigger health check by waiting a bit
+    await waitFor(() => {
+      expect(screen.getByText('Backend Unavailable')).toBeInTheDocument()
+      expect(screen.getByText(/Download Chat History/i)).toBeInTheDocument()
+    }, { timeout: 6000 })
+  })
+
+  it('disables input when backend is unavailable', async () => {
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.reject(new Error('Backend unavailable'))
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    render(<Home />)
+
+    await waitFor(() => {
+      const input = screen.getByPlaceholderText('Backend unavailable...')
+      expect(input).toBeDisabled()
+      const sendButton = screen.getByText('Send')
+      expect(sendButton).toBeDisabled()
+    }, { timeout: 5000 })
+  })
+
+  it('preserves chat history when backend fails', async () => {
+    ;(fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'ok' }),
+        })
+      }
+      if (url.includes('/chat')) {
+        return Promise.reject(new Error('Backend error'))
+      }
+      return Promise.reject(new Error(`Unexpected call to ${url}`))
+    })
+
+    render(<Home />)
+    const input = screen.getByPlaceholderText('Type your message...')
+    const sendButton = screen.getByText('Send')
+
+    fireEvent.change(input, { target: { value: 'Test message' } })
+    fireEvent.click(sendButton)
+
+    await waitFor(() => {
+      // User message should be preserved even though backend failed
+      expect(screen.getByText('Test message')).toBeInTheDocument()
+      // Error should be shown
+      expect(screen.getByText(/Failed to send message/i)).toBeInTheDocument()
+    })
+  })
+
 })

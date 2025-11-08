@@ -4,22 +4,21 @@ A simple TypeScript chat assistant that answers Nextflow documentation Q&A with 
 
 ## Features
 
-- **Documentation Q&A (70%)**: Answers questions about Nextflow features, syntax, and capabilities
-- **Troubleshooting (30%)**: Provides pragmatic guidance for common issues:
-  - DSL1 vs DSL2 operator confusion
-  - Executor configuration questions
-  - Version checking and pinning
+
 - **Multi-turn conversations**: Maintains context within a session
 - **Responsive UI**: Works on desktop and mobile devices
-- **Fallback mode**: Works without vector store by calling Gemini directly
+- **Vector search**: Semantic search over Nextflow documentation with citations
+- **Light Prompt Injection check**: Prompt injection detection and logging
+- **Error handling**: Graceful degradation with error messages
+- **Docker support**: One-command deployment with docker-compose
 
 ## Tech Stack
 
 - **Frontend**: Next.js 14 with TypeScript, React
 - **Backend**: FastAPI (Python)
-- **LLM**: Gemini 2.5 via Google Vertex API (using litellm)
+- **LLM**: Gemini 2.0 Flash via Google Vertex AI (using google-genai SDK)
 - **Vector Store**: FAISS with sentence-transformers for semantic search (free, offline)
-- **Fallback**: Direct Gemini calls when vector store or backend unavailable
+- **Deployment**: Docker containers, Railway-ready
 
 ## Local Setup
 
@@ -103,93 +102,122 @@ The frontend will be available at `http://localhost:3000`
 
 ## Deployment
 
-### Recommended: Vercel (Frontend) + Railway/Render (Backend)
+### Railway Deployment (Recommended)
 
-This setup separates concerns and uses the best platform for each service.
+Railway supports Docker deployments and is perfect for this full-stack application.
 
-#### Step 1: Deploy Backend to Railway (Recommended)
+#### Prerequisites
 
-**Railway Setup**:
-1. Go to [Railway.app](https://railway.app) and sign up/login
-2. Click "New Project" → "Deploy from GitHub repo"
-3. Select your repository
-4. Railway will auto-detect Python. Configure:
-   - **Root Directory**: `backend`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Add environment variables in Railway dashboard:
-6. Railway will generate a URL like: `https://your-app.railway.app`
-7. Copy this URL - you'll need it for the frontend
+- A [Railway](https://railway.app) account (free tier available)
+- GitHub repository with your code
+- Google Cloud service account JSON file for Vertex AI
 
-**Alternative: Render**:
-1. Go to [Render.com](https://render.com) and sign up
-2. Create a new "Web Service"
-3. Connect your GitHub repository
-4. Configure:
-   - **Root Directory**: `backend`
-   - **Environment**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Add environment variables (same as Railway)
-6. Render will give you a URL like: `https://your-app.onrender.com`
+#### Step 1: Deploy Backend to Railway
 
-#### Step 2: Deploy Frontend to Vercel
+1. **Create a new Railway project**:
+   - Go to [Railway.app](https://railway.app) and sign up/login
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository
 
-**Vercel Setup**:
-1. Go to [Vercel.com](https://vercel.com) and sign up/login
-2. Click "Add New Project" → Import your GitHub repository
-3. Configure:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Next.js (auto-detected)
-   - **Build Command**: `npm run build` (default)
-   - **Output Directory**: `.next` (default)
-4. Add environment variable:
-   - `NEXT_PUBLIC_API_URL` = Your backend URL from Step 1
-     - Example: `https://your-app.railway.app` or `https://your-app.onrender.com`
-5. Click "Deploy"
-6. Vercel will give you a URL like: `https://your-app.vercel.app`
+2. **Configure the backend service**:
+   - Railway will auto-detect the Dockerfile in `backend/Dockerfile`
+   - If not detected, manually set:
+     - **Root Directory**: Leave empty (builds from project root)
+     - **Dockerfile Path**: `backend/Dockerfile`
+     - **Build Context**: Project root
 
-**Important**: Update CORS in backend `main.py`:
+3. **Set environment variables** in Railway dashboard:
+   ```
+   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+   SERVICE_ACCOUNT_PATH=/app/service-account.json
+   LLM_MODEL=gemini-2.0-flash-exp
+   LLM_MAX_TOKENS=1000
+   PORT=8000  # Railway sets this automatically, but can override
+   ```
+
+4. **Add service account file**:
+   - In Railway, go to your service → Variables
+   - Add a file variable named `SERVICE_ACCOUNT_JSON` with your service account JSON content
+   - Or upload the file and Railway will handle it
+
+5. **Deploy**:
+   - Railway will automatically build and deploy
+   - Once deployed, Railway will provide a URL like: `https://your-backend.railway.app`
+   - Copy this URL for the frontend configuration
+
+#### Step 2: Deploy Frontend to Railway
+
+1. **Add a new service** in the same Railway project:
+   - Click "New" → "GitHub Repo" (select the same repo)
+   - Or add a service to the existing project
+
+2. **Configure the frontend service**:
+   - Set **Root Directory**: Leave empty
+   - Set **Dockerfile Path**: `frontend/Dockerfile`
+   - Railway will auto-detect Next.js
+
+3. **Set environment variables**:
+   ```
+   NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+   PORT=3000  # Railway sets this automatically
+   NODE_ENV=production
+   ```
+
+4. **Deploy**:
+   - Railway will build and deploy the frontend
+   - You'll get a URL like: `https://your-frontend.railway.app`
+
+#### Step 3: Update CORS (if needed)
+
+The backend already allows all origins (`allow_origins=["*"]`), but for production you may want to restrict it:
+
 ```python
 # In backend/main.py, update CORS origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://your-app.vercel.app",  # Your Vercel URL
+        "https://your-frontend.railway.app",  # Your Railway frontend URL
         "http://localhost:3000"  # For local dev
     ],
     ...
 )
 ```
 
-### Alternative Deployment Options
+### Local Development with Docker
 
-**All-in-one platforms** (deploy both services):
-- **Render**: Can deploy both frontend and backend as separate services
-- **Fly.io**: Deploy both with Docker
-- **Heroku**: Use buildpacks (note: free tier discontinued)
+You can also run the entire stack locally with Docker Compose:
 
-**Cloud platforms**:
-- **Google Cloud Run**: Deploy backend as container, frontend to Firebase Hosting
-- **AWS**: Backend on ECS/Lambda, frontend on Amplify
-- **Azure**: Backend on App Service, frontend on Static Web Apps
+```bash
+# Build and start both services
+docker-compose up --build
+
+# Backend will be at http://localhost:8000
+# Frontend will be at http://localhost:3000
+```
+
+See `docker-compose.yml` for configuration details.
+
+### Environment Variables Reference
+
+**Backend** (Railway):
+- `GOOGLE_CLOUD_PROJECT` - Your GCP project ID (required)
+- `SERVICE_ACCOUNT_PATH` - Path to service account JSON (default: `/app/service-account.json`)
+- `LLM_MODEL` - Model name (default: `gemini-2.0-flash-exp`)
+- `LLM_MAX_TOKENS` - Max output tokens (default: `1000`)
+- `PORT` - Server port (Railway sets automatically)
+
+**Frontend** (Railway):
+- `NEXT_PUBLIC_API_URL` - Backend API URL (required)
+- `PORT` - Server port (Railway sets automatically)
 
 ## Demo URL
 
-**Deployed URL**: [Add your deployed URL here after deployment]
+**Deployed URL**: [Add your Railway deployment URL here after deployment]
 
-**Note**: The demo will call Gemini directly if the vector store is unavailable.
+**Note**: 
+- Vector store index is built on first startup (may take a few minutes)
+- Chat history is preserved within sessions but not persisted across restarts
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
-
-## Usage Examples
-
-The assistant can handle questions like:
-
-- "What is the latest version of Nextflow?"
-- "Are from and into parts of DSL2 syntax?"
-- "Does Nextflow support a Moab executor?"
-- "What was that version again?" (follow-up)
-- "Can you cite that?" (citations)
 
 ## Project Structure
 
@@ -216,17 +244,7 @@ The application uses a shared `config.yaml` file for common settings. See [CONFI
 
 Most settings can be configured via environment variables (which override `config.yaml`):
 
-**Backend:**
-- `GOOGLE_VERTEX_API_KEY`: Google Vertex API key
-- `LLM_MODEL`: LLM model name (default: `vertex_ai/gemini-2.0-flash-exp`)
-- `LLM_TEMPERATURE`: Temperature setting (default: `0.7`)
-- `NEXTFLOW_DOCS_DIR`: Path to Nextflow docs
-- `VECTOR_INDEX_PATH`: Vector index file path
 
-**Frontend:**
-- `NEXT_PUBLIC_API_URL`: Backend API URL
-- `NEXT_PUBLIC_GOOGLE_VERTEX_API_KEY`: Google Vertex API key (for fallback)
-- `NEXT_PUBLIC_GEMINI_MODEL`: Gemini model name
 
 All other settings (system prompt, loading messages, etc.) can be edited in `config.yaml`.
 
@@ -240,29 +258,10 @@ The application handles:
 
 ## Testing
 
-See test documentation:
-- **Backend tests**: [backend/README_TESTS.md](./backend/README_TESTS.md)
-- **Frontend tests**: [frontend/README_TESTS.md](./frontend/README_TESTS.md)
+Run backend tests: `cd backend && pytest test_main.py -v`  
+Run frontend tests: `cd frontend && npm test`
 
-Run backend tests:
-```bash
-cd backend
-pytest test_main.py -v
-```
-
-Run frontend tests:
-```bash
-cd frontend
-npm test
-```
-
-## Limitations
-
-- No data persistence across app restarts
-- No user authentication
-- No cross-session history
-- In-memory session storage only
-- Vector store index must be rebuilt if docs change
+See [backend/README_TESTS.md](./backend/README_TESTS.md) and [frontend/README_TESTS.md](./frontend/README_TESTS.md) for details.
 
 ## License
 

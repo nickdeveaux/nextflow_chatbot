@@ -3,9 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { 
   API_URL, 
-  LOADING_MESSAGES, 
-  SYSTEM_PROMPT, 
-  getGeminiApiUrl 
+  LOADING_MESSAGES
 } from '../config'
 
 interface Message {
@@ -27,6 +25,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [darkMode, setDarkMode] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
+  const [backendAvailable, setBackendAvailable] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -110,47 +109,43 @@ export default function Home() {
     }
   }, [input])
 
-  const callGeminiDirect = async (query: string, conversationHistory: Message[] = []): Promise<string> => {
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...conversationHistory.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      })),
-      { role: 'user', content: query }
-    ]
-
-    const response = await fetch(getGeminiApiUrl(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: messages.filter(m => m.role !== 'system').map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.content }]
-        })),
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`)
+  // Backend health check polling
+  useEffect(() => {
+    const checkBackendHealth = async () => {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+        
+        const response = await fetch(`${API_URL}/health`, {
+          method: 'GET',
+          signal: controller.signal,
+        })
+        
+        clearTimeout(timeoutId)
+        setBackendAvailable(response.ok)
+      } catch (err) {
+        setBackendAvailable(false)
+      }
     }
 
-    const data = await response.json()
-    return data.candidates[0].content.parts[0].text
-  }
+    // Check immediately
+    checkBackendHealth()
+
+    // Then check every 5 seconds
+    const interval = setInterval(checkBackendHealth, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || !backendAvailable) return
 
     const userMessage = input.trim()
     setInput('')
     setError(null)
     setLoading(true)
 
-    // Add user message to UI
+    // Add user message to UI immediately (preserve in history even if backend fails)
     const newMessages: Message[] = [...messages, { role: 'user', content: userMessage }]
     setMessages(newMessages)
 
@@ -186,26 +181,14 @@ export default function Home() {
           citations: data.citations,
         },
       ])
+      setError(null)
     } catch (err) {
-      // If backend is down, try calling Gemini directly
-      try {
-        console.log('Backend unavailable, calling Gemini directly...')
-        const geminiResponse = await callGeminiDirect(userMessage, messages)
-        setMessages([
-          ...newMessages,
-          {
-            role: 'assistant',
-            content: geminiResponse,
-            citations: ['https://www.nextflow.io/docs/latest/'],
-          },
-        ])
-        setError(null)
-      } catch (geminiErr) {
-        const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-        setError(`Failed to send message: ${errorMessage}. Backend and Gemini fallback both unavailable.`)
-        // Remove the user message on error
-        setMessages(messages)
-      }
+      // Backend failed - keep user message in history, show error
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(`Failed to send message: ${errorMessage}. The backend is currently unavailable.`)
+      // User message is already in messages, so we keep it
+      // Mark backend as unavailable
+      setBackendAvailable(false)
     } finally {
       setLoading(false)
     }
@@ -218,8 +201,69 @@ export default function Home() {
     }
   }
 
+  const downloadChatHistory = () => {
+    if (messages.length === 0) return
+
+    // Format chat history as readable text
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const filename = `nextflow-chat-history-${timestamp}.txt`
+    
+    let content = `Nextflow Chat Assistant - Chat History\n`
+    content += `Exported: ${new Date().toLocaleString()}\n`
+    content += `Session ID: ${sessionId || 'N/A'}\n`
+    content += `Total Messages: ${messages.length}\n`
+    content += `\n${'='.repeat(60)}\n\n`
+
+    messages.forEach((message, index) => {
+      const role = message.role === 'user' ? 'User' : 'Assistant'
+      content += `[${index + 1}] ${role}:\n`
+      content += `${message.content}\n`
+      
+      if (message.citations && message.citations.length > 0) {
+        content += `\nCitations:\n`
+        message.citations.forEach((url, i) => {
+          content += `  ${i + 1}. ${url}\n`
+        })
+      }
+      
+      content += `\n${'-'.repeat(60)}\n\n`
+    })
+
+    // Create blob and download
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="container">
+      {/* Backend unavailable modal */}
+      {!backendAvailable && (
+        <div className="modal-overlay" onClick={() => {}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon">😢</div>
+            <h2>Backend Unavailable</h2>
+            <p>The backend service is currently unavailable. Please try again later.</p>
+            <p className="modal-subtext">The chat history can be downloaded for this session.</p>
+            {messages.length > 0 && (
+              <button
+                className="modal-download-button"
+                onClick={downloadChatHistory}
+                aria-label="Download chat history"
+              >
+                📥 Download Chat History
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="header">
         <h1>Nextflow Chat Assistant</h1>
         <button
@@ -334,14 +378,14 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
+            placeholder={backendAvailable ? "Type your message..." : "Backend unavailable..."}
             rows={1}
-            disabled={loading}
+            disabled={loading || !backendAvailable}
           />
           <button
             className="send-button"
             onClick={handleSend}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || !backendAvailable}
           >
             Send
           </button>

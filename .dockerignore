@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.py
+*_test.py
+__tests__/
+*.test.ts
+*.test.tsx
+
+# Documentation
+*.md
+!README.md
+
+# Config (will be copied explicitly)
+# config.yaml
+# nextflow_README.md
+
+# Vector store (will be built in container)
+vector_index.*
+*.index
+*.data
+
+# Service account (should be provided via env var in production)
+*.json
+!package.json
+!package-lock.json
+
+# Logs
+*.log
+
