@@ -32,16 +32,36 @@ if _CONFIG_PATH is None:
 with open(_CONFIG_PATH, 'r') as f:
     _config = yaml.safe_load(f)
 
-SERVICE_ACCOUNT_PATH = os.getenv(
-    "SERVICE_ACCOUNT_PATH",
-   str(_config['api'].get('service_account_path'))
-)
+# Priority order for service account:
+# 1. GOOGLE_SERVICE_ACCOUNT_JSON (env var with JSON content) - create temp file
+# 2. SERVICE_ACCOUNT_PATH (env var with file path)
+# 3. config.yaml value (fallback)
+SERVICE_ACCOUNT_PATH = None
 
-if not SERVICE_ACCOUNT_PATH and os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"):
-    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".json") as f:
-        f.write(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        SERVICE_ACCOUNT_PATH = f.name
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
+# First, check if JSON content is provided (Railway secret - highest priority)
+google_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+if google_json and google_json.strip():
+    try:
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".json") as f:
+            f.write(google_json)
+            SERVICE_ACCOUNT_PATH = f.name
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
+    except Exception as e:
+        raise ValueError(f"Failed to create service account file from GOOGLE_SERVICE_ACCOUNT_JSON: {e}")
+# Otherwise, check for file path (env var or config.yaml)
+else:
+    _service_account_path = os.getenv("SERVICE_ACCOUNT_PATH")
+    if not _service_account_path or not _service_account_path.strip():
+        # Fall back to config.yaml
+        _service_account_path = str(_config['api'].get('service_account_path', '') or '')
+    
+    if _service_account_path and _service_account_path.strip():
+        SERVICE_ACCOUNT_PATH = _service_account_path.strip()
+        # Verify file exists if it's not an empty string
+        if SERVICE_ACCOUNT_PATH and not os.path.exists(SERVICE_ACCOUNT_PATH):
+            # Don't fail here - let the LLM client handle the error with a better message
+            pass
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
 
 # LLM Configuration (env var overrides YAML)
 LLM_MODEL = os.getenv("LLM_MODEL", _config['llm']['model'])
