@@ -32,5 +32,5 @@ echo "To run locally:"
 echo "1. Start backend: cd backend && source venv/bin/activate && uvicorn main:app --reload"
 echo "2. Start frontend: cd frontend && npm run dev"
 echo ""
-echo "Make sure to set GOOGLE_VERTEX_API_KEY in config.yaml or environment variables."
+echo "Make sure to set GOOGLE service account details in config.yaml or environment variables."
 
