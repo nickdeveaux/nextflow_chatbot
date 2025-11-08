@@ -54,7 +54,7 @@ Also, since I used Railway and local development, I removed my docker-compose.ym
 
 I was at first happy to have been able to put all my config in a .yaml, but then I realized Vercel only uses code in the front end directory, so I think in retrospect it might have been simpler to repeat my front-end config instead of trying to port it over from the yaml with config-porting scripts. 
 
-I used Google’s LLM because I have a 90 day free trial with Google Cloud. In retrospect, it might have been interesting to test others, but my instinct is that it won’t make too much of a difference. In order to now become too enmeshed with it, I implemented conversation history tracking without having to rely on it to give me a conversation ID, which makes the gen-ai library more replaceable. 
+I used Google’s LLM because I have a 90 day free trial with Google Cloud. In retrospect, it might have been interesting to test others, but my instinct is that it won’t make too much of a difference. In order to now become too enmeshed with it, I implemented conversation history tracking without having to rely on it to give me a conversation ID, which makes the gen-ai library more replaceable. I never got a chance to evaluate Vercel's AI SDK. 
 
 
 ## Project Structure
