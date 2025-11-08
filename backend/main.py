@@ -220,12 +220,50 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Nextflow Chat Assistant", lifespan=lifespan)
 
-# CORS middleware
+# CORS middleware - allow specific IP and Vercel domains
+def is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed (IP address or Vercel domain)."""
+    if not origin:
+        return False
+    
+    # Allow IP address (with or without protocol)
+    if "12.202.180.110" in origin:
+        return True
+    
+    # Allow Vercel domains (*.vercel.app)
+    if origin.endswith(".vercel.app"):
+        return True
+    
+    # Allow common Vercel patterns
+    if "vercel.app" in origin or "vercel.com" in origin:
+        return True
+    
+    return False
+
+# Get allowed origins from environment or use defaults
+import re
+cors_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else []
+cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
+
+# Add default allowed origins
+default_origins = [
+    "http://12.202.180.110",
+    "https://12.202.180.110",
+    "http://12.202.180.110:3000",
+    "https://12.202.180.110:3000",
+    "http://12.202.180.110:80",
+    "https://12.202.180.110:443",
+]
+
+# Combine and deduplicate
+all_origins = list(set(default_origins + cors_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=all_origins,
+    allow_origin_regex=r"https?://.*\.vercel\.app.*",  # Allow any Vercel app domain
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
