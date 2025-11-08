@@ -37,7 +37,19 @@ RUN if [ "$USE_GPU" = "true" ] && [ -f requirements-gpu.txt ]; then \
 RUN mkdir -p /app/data
 
 # Move backend code to app root (for uvicorn) and index files if they exist
-RUN cp backend/main.py backend/llm_client.py backend/citations.py ./ && \
+# Copy all Python modules that main.py depends on
+RUN cp backend/main.py \
+       backend/llm_client.py \
+       backend/citations.py \
+       backend/config.py \
+       backend/logging_config.py \
+       backend/models.py \
+       backend/session_manager.py \
+       backend/security.py \
+       backend/llm_utils.py \
+       backend/context_formatter.py \
+       backend/vector_store_manager.py \
+       ./ && \
     cp -r backend/vector_store ./vector_store/ && \
     if [ -f backend/vector_index.index ] && [ -f backend/vector_index.data ]; then \
         cp backend/vector_index.index backend/vector_index.data /app/data/ && \
