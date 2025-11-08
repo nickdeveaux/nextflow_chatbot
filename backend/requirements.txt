@@ -1,7 +1,4 @@
-# Production requirements - minimal runtime dependencies
-# For Railway deployment: No torch, no sentence-transformers
-# Note: Vector store requires sentence-transformers for embeddings (install via requirements-build-index.txt)
-
+# Production requirements
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
@@ -18,7 +15,11 @@ pyyaml==6.0.1
 # LLM client
 google-genai==1.37.0
 
-# Vector store - FAISS works with numpy arrays directly
-# Note: sentence-transformers required for embeddings (in requirements-build-index.txt)
+# Vector store - requires sentence-transformers for query embeddings
+# Use CPU-only torch to reduce image size (~150MB vs >1GB for GPU builds)
 faiss-cpu==1.12.0
 numpy>=1.25.0,<2.0
+sentence-transformers==2.2.2
+# Install CPU-only torch from PyTorch's wheel index (no CUDA dependencies)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
