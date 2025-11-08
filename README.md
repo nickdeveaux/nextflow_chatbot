@@ -73,6 +73,27 @@ backend/
 
 frontend/
 ├── app/                       # Next.js app directory
+│   ├── page.tsx               # Main page (composition container)
+│   ├── layout.tsx             # Root layout
+│   ├── globals.css            # Global styles
+│   ├── types.ts               # TypeScript interfaces
+│   ├── utils.ts               # Utility functions
+│   ├── hooks/                 # Custom React hooks
+│   │   ├── useChat.ts         # Chat state and message handling
+│   │   ├── useDarkMode.ts     # Dark mode management
+│   │   ├── useBackendHealth.ts # Backend health monitoring
+│   │   ├── useInput.ts        # Input state and validation
+│   │   └── useLoadingMessage.ts # Loading message rotation
+│   └── components/            # UI components
+│       ├── ChatHeader.tsx     # Header with theme toggle
+│       ├── ChatMessages.tsx   # Messages container
+│       ├── ChatMessage.tsx    # Individual message component
+│       ├── ChatInput.tsx      # Input area with character counter
+│       ├── EmptyState.tsx     # Welcome/empty state
+│       ├── ErrorMessage.tsx   # Error display
+│       ├── LoadingIndicator.tsx # Loading state
+│       ├── BackendUnavailableModal.tsx # Backend unavailable modal
+│       └── markdownComponents.tsx # Markdown renderer components
 ├── config.ts                  # Frontend config (auto-generated)
 ├── package.json               # Dependencies
 ├── Dockerfile                 # Frontend Dockerfile
