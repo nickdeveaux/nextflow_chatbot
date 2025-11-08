@@ -8,53 +8,51 @@ import sys
 import warnings
 
 # Suppress Python warnings (they show as errors in Railway)
-warnings.filterwarnings('ignore')
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 
-class RailwayLogFilter(logging.Filter):
-    """Filter to suppress third-party library logs in Railway."""
-    # Third-party library prefixes to suppress (unless ERROR level)
-    SUPPRESSED_PREFIXES = (
-        'transformers', 'sentence_transformers', 'faiss', 'pydantic',
-        'google', 'google_genai', 'httpx', 'httpcore', 'urllib3',
-        'huggingface_hub', 'torch', 'tokenizers', 'tqdm', 'filelock'
-    )
-    
-    def filter(self, record):
-        # Always show our app logs
-        if record.name in ('main', 'llm_client', '__main__') or record.name.startswith('backend'):
-            return True
-        # Always show ERROR level and above
-        if record.levelno >= logging.ERROR:
-            return True
-        # Block third-party libraries below ERROR level
-        if any(record.name.startswith(prefix) for prefix in self.SUPPRESSED_PREFIXES):
-            return False
-        # Allow other logs (unknown modules) at INFO and above
-        return record.levelno >= logging.INFO
+class InfoFilter(logging.Filter):
+    """Filter to route DEBUG and INFO logs to stdout."""
+    def filter(self, rec):
+        return rec.levelno in (logging.DEBUG, logging.INFO)
 
 
 def setup_logging():
-    """Configure logging for Railway-friendly output."""
-    # Set up logging - INFO level by default (DEBUG shows as errors in Railway)
-    # Railway treats stderr as errors, so we route everything to stdout
+    """Configure logging with correct output streams.
+    
+    DEBUG and INFO logs → stdout (Railway shows as normal logs)
+    WARNING and above → stderr (Railway shows as errors, which is correct)
+    """
+    # Get log level from environment (default: INFO)
     log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        stream=sys.stdout,  # Explicitly use stdout (Railway treats stderr as errors)
-        force=True  # Override any existing configuration
-    )
+    level = getattr(logging, log_level, logging.INFO)
     
-    # Apply filter to root handler
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers:
-        handler.addFilter(RailwayLogFilter())
+    # Get root logger
+    logger = logging.getLogger()
+    logger.setLevel(level)
     
-    # Suppress ALL third-party library logging below WARNING level
+    # Remove any existing handlers
+    logger.handlers.clear()
+    
+    # Handler 1: stdout for DEBUG and INFO
+    h1 = logging.StreamHandler(sys.stdout)
+    h1.setLevel(logging.DEBUG)
+    h1.addFilter(InfoFilter())
+    h1.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    
+    # Handler 2: stderr for WARNING and above
+    h2 = logging.StreamHandler(sys.stderr)
+    h2.setLevel(logging.WARNING)
+    h2.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    
+    # Add both handlers
+    logger.addHandler(h1)
+    logger.addHandler(h2)
+    
+    # Suppress third-party library logging below WARNING level
+    # This prevents verbose logs from showing up
     third_party_loggers = [
         'faiss', 'faiss.loader',
         'pydantic', 'pydantic._internal', 'pydantic._internal._fields',
@@ -73,12 +71,11 @@ def setup_logging():
     for logger_name in third_party_loggers:
         third_party_logger = logging.getLogger(logger_name)
         third_party_logger.setLevel(logging.WARNING)
-        # Also disable propagation to prevent messages from bubbling up
         third_party_logger.propagate = False
     
-    # Ensure our app logs are visible
-    logging.getLogger('main').setLevel(logging.INFO)
-    logging.getLogger('llm_client').setLevel(logging.INFO)
+    # Return app logger for convenience
+    app_logger = logging.getLogger('main')
+    app_logger.setLevel(level)
     
-    return logging.getLogger(__name__)
+    return app_logger
 

@@ -1,0 +1,13 @@
+# Vercel ignore file
+# Only deploy the frontend directory
+
+backend/
+docs/
+scripts/
+*.md
+!VERCEL_DEPLOYMENT.md
+config.yaml
+railway.json
+docker-compose.yml
+setup.sh
+

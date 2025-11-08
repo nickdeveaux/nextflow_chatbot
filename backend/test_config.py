@@ -27,10 +27,9 @@ def test_llm_max_tokens():
 
 
 def test_nextflow_docs_dir():
-    """Test docs directory is defined (may be empty for LLM-only mode)."""
+    """Test docs directory is defined (may be empty)."""
     assert config.NEXTFLOW_DOCS_DIR is not None
     assert isinstance(config.NEXTFLOW_DOCS_DIR, str)
-    # Can be empty string for LLM-only mode
 
 
 def test_vector_index_path():

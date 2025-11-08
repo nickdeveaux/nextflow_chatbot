@@ -133,6 +133,7 @@ frontend:
     - "Evaluating"
     - "Deliberating"
   api_url: "http://localhost:8000"  # Default for local dev - override with NEXT_PUBLIC_API_URL env var
+  # Production (Vercel): Set NEXT_PUBLIC_API_URL=https://nextflowchatbot-production.up.railway.app
   # For IP access (12.202.180.110): Set NEXT_PUBLIC_API_URL=http://12.202.180.110:8000
-  # For Railway: Set NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+  # For Railway backend: Set NEXT_PUBLIC_API_URL=https://your-backend.railway.app
 
