@@ -3,12 +3,10 @@
 
 # API Configuration
 api:
-  # Service account: Set via GOOGLE_SERVICE_ACCOUNT_JSON (env, recommended) or SERVICE_ACCOUNT_PATH (env/file path)
-  # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
-  # For Railway: Use GOOGLE_SERVICE_ACCOUNT_JSON env var with JSON content, or upload file and set SERVICE_ACCOUNT_PATH
-  service_account_path: ""  # Leave empty - set via environment variables (see README.md)
+  service_account_path: "white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file (env: SERVICE_ACCOUNT_PATH)
   gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
   gemini_model: "gemini-2.0-flash-exp"
+  # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
 
 # LLM Configuration
 # All settings can be overridden via environment variables
@@ -51,14 +49,18 @@ system_prompt: |
   ```bash
   conda install -c bioconda nextflow
   ```
-  Common Pitfalls in Nextflow Usage
-Many user errors arise from subtle mismatches between DSL1 and DSL2 syntax, misconfigured executors, or missing output files. When a user mentions operators like into, from, or an “operator not found” error, suspect a DSL mismatch—especially if nextflow.enable.dsl=2 is missing at the top of the script. If the issue concerns job submission or scheduler keywords such as “slurm,” “awsbatch,” or “executor,” guide them to inspect their process.executor configuration and confirm the active executor using nextflow config | grep executor. When a process fails with “Missing output file(s) expected by process,” it often means the declared output pattern doesn’t match what the command actually produced, or files were written to the wrong directory.
-
-Environment, Resource, and Version Problems
-Resource exhaustion is another recurring cause of task failure. Exit codes 137 or 143 typically mean the process was terminated by the system for using too much memory or exceeding its time limit. In such cases, suggest increasing the memory or time directive in the configuration and possibly using errorStrategy 'retry' with scaled resources. Environment mismatches also cause reproducibility issues; remind users to check their Nextflow version with nextflow -version, and to pin versions explicitly using NXF_VER=... nextflow run ... for consistent results across environments.
-
-Actionable Next Steps for Debugging
-Always recommend verifying the problem locally. Users can inspect the failing task directory (e.g., work/xx/yyyy.../) and run .command.run or .command.sh manually to see what failed. Encourage short, testable commands to isolate the issue—such as re-running one process with -resume after adjusting resources or syntax
+  
+  ## Common Pitfalls in Nextflow Usage
+  
+  Many user errors arise from subtle mismatches between DSL1 and DSL2 syntax, misconfigured executors, or missing output files. When a user mentions operators like into, from, or an "operator not found" error, suspect a DSL mismatch—especially if nextflow.enable.dsl=2 is missing at the top of the script. If the issue concerns job submission or scheduler keywords such as "slurm," "awsbatch," or "executor," guide them to inspect their process.executor configuration and confirm the active executor using nextflow config | grep executor. When a process fails with "Missing output file(s) expected by process," it often means the declared output pattern doesn't match what the command actually produced, or files were written to the wrong directory.
+  
+  ## Environment, Resource, and Version Problems
+  
+  Resource exhaustion is another recurring cause of task failure. Exit codes 137 or 143 typically mean the process was terminated by the system for using too much memory or exceeding its time limit. In such cases, suggest increasing the memory or time directive in the configuration and possibly using errorStrategy 'retry' with scaled resources. Environment mismatches also cause reproducibility issues; remind users to check their Nextflow version with nextflow -version, and to pin versions explicitly using NXF_VER=... nextflow run ... for consistent results across environments.
+  
+  ## Actionable Next Steps for Debugging
+  
+  Always recommend verifying the problem locally. Users can inspect the failing task directory (e.g., work/xx/yyyy.../) and run .command.run or .command.sh manually to see what failed. Encourage short, testable commands to isolate the issue—such as re-running one process with -resume after adjusting resources or syntax.
 
   ## Documentation
   
@@ -114,9 +116,7 @@ cors:
   allowed_origins:  # Comma-separated list in env: CORS_ORIGINS
     # Add your frontend URLs here (or use CORS_ORIGINS env var)
     - "http://localhost:3000"  # Local development (Next.js default)
-    - "http://localhost:3001"  # Local development (alternate port)
     - "http://127.0.0.1:3000"  # Local development
-    - "http://127.0.0.1:3001"  # Local development (alternate port)
     - "http://localhost"  # For accessing frontend via localhost
     - "http://127.0.0.1"  # For accessing frontend via 127.0.0.1
     # Add your production frontend URL here (e.g., your Vercel deployment)

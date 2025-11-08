@@ -86,7 +86,7 @@ def initialize_vector_store():
 def load_or_build_index(vector_store: Optional[FAISSVectorStore]):
     """Build index if it doesn't exist.
     
-    Always attempts to build if index is missing, regardless of CPU/GPU or docs availability.
+    Always attempts to build if index is missing, regardless of docs availability.
     """
     if not vector_store or not VECTOR_STORE_AVAILABLE:
         return

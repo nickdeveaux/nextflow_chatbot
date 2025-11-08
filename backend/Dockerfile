@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy config and check scripts
 COPY config.yaml ./
-COPY backend/config.py backend/check_index.py backend/check_gpu.py ./
+COPY backend/config.py backend/check_index.py ./
 
 # Copy backend directory (includes code, requirements, and optional index files)
 COPY backend/ ./backend/
@@ -17,21 +17,8 @@ COPY backend/ ./backend/
 # Check if vector index exists in repo
 RUN python check_index.py || echo "Index check: No index found"
 
-# Install base requirements (CPU-only by default)
+# Install requirements (CPU-only)
 RUN pip install --no-cache-dir -r backend/requirements.txt
-
-# Detect GPU and install GPU-accelerated packages if available
-# Note: In Docker, GPU detection happens at runtime, not build time
-# So we check via build arg or install both and let runtime choose
-ARG USE_GPU=false
-COPY backend/requirements-gpu.txt* ./
-RUN if [ "$USE_GPU" = "true" ] && [ -f requirements-gpu.txt ]; then \
-    echo "GPU mode enabled - Installing GPU-accelerated packages..."; \
-    pip install --no-cache-dir -r requirements-gpu.txt; \
-    echo "✓ GPU packages installed"; \
-    else \
-    echo "CPU-only mode - Using CPU-optimized packages from requirements.txt"; \
-    fi
 
 # Create persistent data directory first (needed for index files)
 RUN mkdir -p /app/data

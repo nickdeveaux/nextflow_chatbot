@@ -1,8 +1,0 @@
-# GPU-accelerated requirements (use with USE_GPU=true build arg)
-# Upgrades torch to GPU version for faster embeddings
-# Note: faiss-cpu is kept (works fine with GPU torch)
-
-# Install GPU-enabled torch (replaces CPU version from requirements.txt)
---extra-index-url https://download.pytorch.org/whl/cu118
-torch
-
