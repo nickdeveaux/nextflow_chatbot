@@ -101,9 +101,25 @@ RUN apt-get update && apt-get install -y \
 COPY --from=backend-setup /app ./
 
 # Copy frontend standalone build
-COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend
-COPY --from=frontend-builder /app/frontend/.next/static ./frontend/.next/static
-COPY --from=frontend-builder /app/frontend/public ./frontend/public
+# Next.js standalone output: .next/standalone/ contains server.js and node_modules
+# The structure is: .next/standalone/[package-name]/server.js or .next/standalone/server.js
+# We'll copy the entire standalone directory and handle structure in the startup script
+RUN mkdir -p /app/frontend-standalone
+COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend-standalone-temp
+COPY --from=frontend-builder /app/frontend/.next/static ./frontend-standalone/.next/static
+COPY --from=frontend-builder /app/frontend/public ./frontend-standalone/public
+
+# Next.js standalone might nest the server.js in a subdirectory
+# Find and copy server.js to the right location
+RUN if [ -f ./frontend-standalone-temp/server.js ]; then \
+    cp -r ./frontend-standalone-temp/* ./frontend-standalone/; \
+    elif [ -f ./frontend-standalone-temp/frontend/server.js ]; then \
+    cp -r ./frontend-standalone-temp/frontend/* ./frontend-standalone/; \
+    elif [ -d ./frontend-standalone-temp ]; then \
+    find ./frontend-standalone-temp -name "server.js" -exec cp --parents {} ./frontend-standalone/ \; && \
+    find ./frontend-standalone-temp -type d -name "node_modules" -exec cp -r --parents {} ./frontend-standalone/ \; 2>/dev/null || true; \
+    fi && \
+    rm -rf ./frontend-standalone-temp
 
 # Create simple reverse proxy server
 RUN cat > /app/proxy.js << 'EOFJS'
@@ -170,11 +186,13 @@ echo "=========================================="
 echo "Starting Nextflow Chat Assistant"
 echo "=========================================="
 
-# Start FastAPI backend
+# Start FastAPI backend on internal port 8001 (NOT 8000!)
 echo "Starting FastAPI backend on port 8001..."
 cd /app
+# Use exec to run in background but allow signal handling
 uvicorn main:app --host 0.0.0.0 --port 8001 > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
+echo "Backend PID: $BACKEND_PID"
 
 # Wait for backend to be ready
 echo "Waiting for backend to start..."
@@ -193,9 +211,27 @@ done
 
 # Start Next.js frontend
 echo "Starting Next.js frontend on port 3000..."
-cd /app/frontend
-PORT=3000 node server.js > /tmp/frontend.log 2>&1 &
+cd /app/frontend-standalone
+
+# Find server.js (it might be in the current dir or a subdirectory)
+SERVER_JS=$(find . -name "server.js" -type f | head -1)
+if [ -z "$SERVER_JS" ]; then
+  echo "ERROR: server.js not found in frontend-standalone directory"
+  echo "Directory structure:"
+  find . -type f -name "*.js" | head -10
+  echo "Full directory contents:"
+  ls -laR . | head -50
+  exit 1
+fi
+
+echo "Found server.js at: $SERVER_JS"
+SERVER_DIR=$(dirname "$SERVER_JS")
+cd "$SERVER_DIR"
+
+# Start Next.js server
+PORT=3000 HOSTNAME=0.0.0.0 node server.js > /tmp/frontend.log 2>&1 &
 FRONTEND_PID=$!
+echo "Frontend PID: $FRONTEND_PID"
 
 # Wait for frontend to be ready
 echo "Waiting for frontend to start..."
@@ -204,9 +240,16 @@ for i in {1..30}; do
     echo "✓ Frontend is ready!"
     break
   fi
+  if [ $i -eq 5 ]; then
+    echo "Frontend startup log (first 50 lines):"
+    head -50 /tmp/frontend.log || echo "No frontend log yet"
+  fi
   if [ $i -eq 30 ]; then
     echo "✗ Frontend failed to start (check logs)"
+    echo "Full frontend log:"
     cat /tmp/frontend.log
+    echo "Directory structure:"
+    ls -la /app/frontend-standalone/
     exit 1
   fi
   sleep 1
@@ -216,10 +259,17 @@ done
 echo "Starting reverse proxy on port ${PORT:-8000}..."
 echo "=========================================="
 cd /app
-PORT=${PORT:-8000} node proxy.js
 
-# If proxy exits, cleanup
-kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+# Function to cleanup on exit
+cleanup() {
+  echo "Shutting down..."
+  kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+# Start proxy (runs in foreground as main process)
+PORT=${PORT:-8000} node proxy.js
 EOFSH
 
 RUN chmod +x /app/start.sh
@@ -234,5 +284,5 @@ ENV NODE_ENV=production
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the unified server
-CMD ["/app/start.sh"]
+# Use ENTRYPOINT to ensure our script always runs (Railway can't override this)
+ENTRYPOINT ["/bin/bash", "/app/start.sh"]
