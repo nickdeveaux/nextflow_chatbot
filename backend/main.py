@@ -12,12 +12,21 @@ import uuid
 # Set tokenizers parallelism to avoid fork warnings
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-# Setup logging
+# Suppress FAISS loader INFO messages before any imports
+# Set this environment variable to prevent instruction set detection logs
+os.environ.setdefault("FAISS_OPT_LEVEL", "")
+
+# Setup logging (do this early, before importing modules that use logging)
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Suppress noisy INFO/DEBUG messages from third-party libraries
+# Set these BEFORE importing the modules that use them
+logging.getLogger('faiss.loader').setLevel(logging.WARNING)
+logging.getLogger('pydantic._internal._fields').setLevel(logging.ERROR)
 
 # Vector store imports - FAISS is lightweight, always try to import
 # EmbeddingGenerator is lazy-loaded only when needed (for queries or building)
