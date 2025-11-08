@@ -96,7 +96,18 @@ def _initialize_vector_store():
     try:
         print(f"Creating FAISSVectorStore with index_path: {index_path}")
         vector_store = FAISSVectorStore(embedding_gen, index_path=index_path)
-        print(f"✓ FAISSVectorStore created (index loaded: {vector_store.index is not None and vector_store.index.ntotal > 0 if vector_store.index else False})")
+        index_loaded = vector_store.index is not None and vector_store.index.ntotal > 0 if vector_store.index else False
+        print(f"✓ FAISSVectorStore created (index loaded: {index_loaded})")
+        
+        # Pre-warm embedding model with a dummy query to avoid first-query delay
+        if index_loaded:
+            print("Pre-warming embedding model...")
+            try:
+                embedding_gen.embed("warmup")
+                print("✓ Embedding model warmed up")
+            except Exception as e:
+                print(f"Warning: Failed to warm up model: {e}")
+        
         return vector_store
     except Exception as e:
         error_msg = f"Error creating FAISSVectorStore: {e}"
