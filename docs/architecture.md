@@ -54,7 +54,6 @@ Chat Request:
 ## Key Design Decisions
 
 - **Separation of concerns** - Small, focused modules
-- **Graceful degradation** - Works without vector store (LLM-only)
 - **CPU-optimized** - Single-threaded embeddings for small servers
 - **Configuration** - Centralized in `config.yaml` with env overrides
-- **Error handling** - Clear messages, user messages preserved on error
+- **Error handling** - Clear messages, user messages preserved for download on error
