@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node ../scripts/sync-config.js && next build",
+    "build": "(node ../scripts/sync-config.js || echo 'Config sync skipped (using env vars)') && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "sync-config": "node ../scripts/sync-config.js"
+    "sync-config": "node ../scripts/sync-config.js || echo 'Config sync skipped'"
   },
   "dependencies": {
     "@types/node": "^20.10.0",
