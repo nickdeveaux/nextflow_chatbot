@@ -5,7 +5,6 @@
 api:
   service_account_path: "white-academy-476808-f4-ecc4626c3715.json"  # Path to service account JSON file (env: SERVICE_ACCOUNT_PATH)
   gemini_api_base_url: "https://generativelanguage.googleapis.com/v1beta"
-  gemini_model: "gemini-2.0-flash-exp"
   # Priority: GOOGLE_SERVICE_ACCOUNT_JSON (env) > SERVICE_ACCOUNT_PATH (env) > service_account_path (yaml)
 
 # LLM Configuration
